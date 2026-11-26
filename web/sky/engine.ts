@@ -545,7 +545,7 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
   let placeNames: PlaceName[] = [];
   let pointedWorld: World | undefined;
 
-  const pointer = { x: 0, y: 0, known: false };
+  const pointer = { x: 0, y: 0 };
   let drag: { x: number; y: number; travelled: number; at: number; turns: boolean } | undefined;
   /** Where the pointer is over the slot, if it is. */
   let hover: { x: number; y: number } | undefined;
@@ -1253,7 +1253,6 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
   function track(event: PointerEvent) {
     pointer.x = event.clientX;
     pointer.y = event.clientY;
-    pointer.known = true;
     if (still || event.pointerType !== 'mouse') return;
     const head = trail[trail.length - 1];
     if (!head || Math.hypot(head.x - pointer.x, head.y - pointer.y) > 5) {

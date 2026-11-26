@@ -972,10 +972,12 @@ h1 .spark {
   margin: -44px -64px -52px -9vw;
 }
 
+/* A pencil note in the corner of the sky the plate leaves free. */
 .plate[data-view='cover'] .hint {
   left: auto;
-  right: 9%;
-  bottom: 7%;
+  right: 6%;
+  top: 13%;
+  bottom: auto;
   transform: rotate(-4deg);
 }
 
@@ -1133,8 +1135,9 @@ h1 .spark {
 
 .plate[data-view='system'] .hint {
   left: auto;
-  right: 8%;
-  bottom: 60px;
+  right: 6%;
+  top: 5%;
+  bottom: auto;
   transform: rotate(-4deg);
   font-size: 17px;
   opacity: clamp(0, 1 - var(--zoom) * 3, 1);

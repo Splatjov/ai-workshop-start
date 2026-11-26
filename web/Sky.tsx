@@ -92,7 +92,7 @@ export function Sky({ slot, aim, worlds, names, kin, rim, at, chart, named, chos
     });
   }, [engine, theme]);
   // The worlds first, then where the eye is: it can only go to a world that is there.
-  useEffect(() => engine?.system(worlds, kin, rim, written.current), [engine, worlds, kin, rim, names, chart]);
+  useEffect(() => engine?.system(worlds, kin, rim, written.current), [engine, worlds, kin, rim, names, chart, named]);
   useEffect(() => engine?.visit(at), [engine, at]);
   useEffect(() => engine?.choose(chosen), [engine, chart, chosen]);
   useEffect(() => engine?.point(pointed), [engine, chart, pointed]);
