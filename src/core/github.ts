@@ -308,7 +308,8 @@ function client({ fetch, token, tokenSource = ENVIRONMENT }: GitHubOptions) {
     const body: unknown = await response.json().catch(() => undefined);
     const message = (body as { message?: unknown } | undefined)?.message;
     const text = typeof message === 'string' ? message : '';
-    if (response.status === 404) throw new AtlasError(notFound);
+    // An unknown ref is a 422 from the commits API, not a 404.
+    if (response.status === 404 || (response.status === 422 && /^No commit found/i.test(text))) throw new AtlasError(notFound);
     if (response.status === 409 && /empty/i.test(text)) throw new EmptyRepository(`Repository is empty: ${url}`);
     if ((response.status === 403 || response.status === 429) && /rate limit/i.test(text)) {
       throw new AtlasError(`GitHub rate limit reached; ${token ? `try again in ${wait(response)}` : tokenSource.set}`);
