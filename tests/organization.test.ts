@@ -8,14 +8,14 @@ import { parseGitHubUrl, type Fetch } from '../src/core/github.ts';
 import { filterSkills, type Skill } from '../src/core/model.ts';
 import { replay, type Recording } from '../src/core/replay.ts';
 import { atlas, CLI, FIXTURE } from './helpers.ts';
-import { COMMIT, GAMMA_COMMIT, RECORDING } from './web/recording.ts';
+import { ATLAS_ORG, COMMIT, GAMMA_COMMIT, graphql, RECORDING } from './web/recording.ts';
 
 /** GitHub from the recording, and every request made, with its Authorization header. */
 function github(recording: Recording = RECORDING) {
-  const requests: { url: string; authorization?: string }[] = [];
+  const requests: { url: string; authorization?: string; method?: string; body?: string }[] = [];
   const recorded = replay(recording);
   const fetch: Fetch = (url, init) => {
-    requests.push({ url, authorization: init?.headers?.Authorization });
+    requests.push({ url, authorization: init?.headers?.Authorization, method: init?.method, body: init?.body });
     return recorded(url, init);
   };
   return { fetch, requests };
@@ -47,22 +47,65 @@ test('github.com/<owner> is an organization; with a repository, a repository', (
   assert.equal(parseGitHubUrl('https://github.com/'), undefined);
 });
 
-test('organization, without a token: the repository list, then each tree; only repositories with skills, by id', async () => {
+test('organization, without a token: the repository list, then one request a repository; only repositories with skills, by id', async () => {
   const { fetch, requests } = github();
   const result = await atlas(['scan', 'https://github.com/atlas-org'], { fetch });
   assert.equal(result.code, 0, result.stderr);
   assert.equal(result.stdout, ORGANIZATION);
   assert.match(result.stderr, WARNING); // a warning names its repository
-  const urls = requests.map((request) => request.url);
-  assert.ok(urls.includes('https://api.github.com/users/atlas-org/repos?per_page=100&page=1'));
-  assert.ok(!urls.some((url) => url.includes('/search/')));
   assert.ok(requests.every((request) => request.authorization === undefined));
-  // The fork is not scanned; the empty repository is asked for its commit and left out.
-  assert.ok(!urls.some((url) => url.includes('atlas-org/forked')));
-  assert.ok(urls.includes('https://api.github.com/repos/atlas-org/empty/commits/main'));
+  assert.deepEqual(
+    requests.map((request) => request.url).filter((url) => url.startsWith('https://api.github.com/')).sort(),
+    [
+      // The commit is asked for only where the tree has a SKILL.md.
+      'https://api.github.com/repos/atlas-org/alpha/commits/main',
+      'https://api.github.com/repos/atlas-org/alpha/git/trees/main?recursive=1',
+      // No skill, and empty: one request each. The fork: none.
+      'https://api.github.com/repos/atlas-org/beta/git/trees/main?recursive=1',
+      'https://api.github.com/repos/atlas-org/empty/git/trees/main?recursive=1',
+      'https://api.github.com/repos/atlas-org/gamma/commits/trunk',
+      'https://api.github.com/repos/atlas-org/gamma/git/trees/trunk?recursive=1',
+      'https://api.github.com/users/atlas-org',
+      'https://api.github.com/users/atlas-org/repos?per_page=100&page=1',
+    ],
+  );
 });
 
-test('organization, with a token: one code search, then the tree of each repository it does not answer for; the same result', async () => {
+test('organization, without a token: a push between the tree and the commit, a tree too large → the repository is read at its commit', async () => {
+  const ok = (body: unknown) => ({ status: 200, body });
+  const pushed = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  const skill = { path: '.claude/skills/commits/SKILL.md', mode: '100644', type: 'blob', sha: 'a' };
+  const api = 'https://api.github.com/repos/moving';
+  const { fetch, requests } = github({
+    'https://api.github.com/users/moving': ok({ login: 'moving', public_repos: 2 }),
+    'https://api.github.com/users/moving/repos?per_page=100&page=1': ok([
+      { full_name: 'moving/pushed', default_branch: 'main', fork: false },
+      { full_name: 'moving/large', default_branch: 'main', fork: false },
+    ]),
+    // The tree was listed at one commit; the branch is at the next one when its commit is asked for.
+    [`${api}/pushed/git/trees/main?recursive=1`]: ok({ sha: COMMIT, truncated: false, tree: [{ ...skill, path: 'old/SKILL.md' }] }),
+    [`${api}/pushed/commits/main`]: ok({ sha: pushed, commit: { tree: { sha: 'new-tree' } } }),
+    [`${api}/pushed/git/trees/${pushed}?recursive=1`]: ok({ sha: 'new-tree', truncated: false, tree: [skill] }),
+    [`https://raw.githubusercontent.com/moving/pushed/${pushed}/.claude/skills/commits/SKILL.md`]: ok('---\nname: commits\ndescription: Write good commits.\n---\n'),
+    // Too large for one answer: only the skill roots, and a warning, as for any repository.
+    [`${api}/large/git/trees/main?recursive=1`]: ok({ sha: COMMIT, truncated: true, tree: [] }),
+    [`${api}/large/commits/main`]: ok({ sha: COMMIT, commit: { tree: { sha: 'large-tree' } } }),
+    [`${api}/large/git/trees/${COMMIT}?recursive=1`]: ok({ sha: 'large-tree', truncated: true, tree: [] }),
+    [`${api}/large/git/trees/${COMMIT}`]: ok({ sha: 'large-tree', truncated: false, tree: [] }),
+  });
+  const result = await atlas(['scan', 'https://github.com/moving'], { fetch });
+  assert.equal(
+    result.stdout,
+    ['moving · 1 skill in 1 repository', '', 'moving/pushed · 1 skill', 'commits — Write good commits.', `  https://github.com/moving/pushed/blob/${pushed}/.claude/skills/commits/SKILL.md`].join('\n'),
+  );
+  assert.equal(
+    result.stderr,
+    'warning: moving/large: the tree is too large to list at once; looked only in .agents/skills, .claude/skills, .github/skills, agent/skills (GITHUB_TOKEN searches everywhere)',
+  );
+  assert.ok(!requests.some((request) => request.url.includes('old/SKILL.md')));
+});
+
+test('organization, with a token: a code search and one request for every 25 repositories; a tree only where skills may be', async () => {
   const { fetch, requests } = github();
   const result = await atlas(['scan', 'github.com/atlas-org/'], { fetch, token: 'secret' });
   assert.equal(result.code, 0, result.stderr);
@@ -72,107 +115,169 @@ test('organization, with a token: one code search, then the tree of each reposit
   assert.deepEqual(
     api.map((request) => request.url).sort(),
     [
-      'https://api.github.com/repos/atlas-org/alpha/commits/HEAD',
-      // beta and empty are not in the search's answer: their trees are read; the fork is not.
-      'https://api.github.com/repos/atlas-org/beta/commits/main',
-      `https://api.github.com/repos/atlas-org/beta/git/trees/${COMMIT}?recursive=1`,
-      'https://api.github.com/repos/atlas-org/empty/commits/main',
-      'https://api.github.com/repos/atlas-org/gamma/commits/HEAD',
+      // The five repositories' commits and usual skill places: one request. beta, empty and
+      // the fork cost none of their own.
+      'https://api.github.com/graphql',
+      `https://api.github.com/repos/atlas-org/alpha/git/trees/${COMMIT}?recursive=1`,
+      `https://api.github.com/repos/atlas-org/gamma/git/trees/${GAMMA_COMMIT}?recursive=1`,
       'https://api.github.com/search/code?q=filename:SKILL.md+user:atlas-org&per_page=100&page=1',
       'https://api.github.com/users/atlas-org',
       'https://api.github.com/users/atlas-org/repos?per_page=100&page=1',
     ],
   );
   assert.ok(api.every((request) => request.authorization === 'Bearer secret'));
+  const probe = requests.find((request) => request.url.endsWith('/graphql'))!;
+  assert.equal(probe.method, 'POST');
+  // Every usual place of skills is asked about, and no fork.
+  for (const place of ['SKILL.md', 'skills', '.agents/skills', '.claude/skills', '.github/skills', 'agent/skills']) {
+    assert.ok(probe.body!.includes(JSON.stringify(`HEAD:${place}`).slice(1, -1)), place);
+  }
+  assert.ok(!probe.body!.includes('forked'));
 });
 
-test('organization: an archived repository, which code search leaves out, is scanned with a token as without', async () => {
+/** atlas-org with one more repository: listed, known to GraphQL, with the files given. */
+function withRepository(name: string, places: string[], files: Record<string, string>, extra: Recording = {}): Recording {
   const ok = (body: unknown) => ({ status: 200, body });
+  const id = `atlas-org/${name}`;
   const listed = RECORDING['https://api.github.com/users/atlas-org/repos?per_page=100&page=1'].body as object[];
-  const recording: Recording = {
+  const tree = Object.keys(files).map((path) => ({ path, mode: '100644', type: 'blob', sha: path }));
+  return {
     ...RECORDING,
-    'https://api.github.com/users/atlas-org/repos?per_page=100&page=1': ok([
-      ...listed,
-      { full_name: 'atlas-org/archived', default_branch: 'main', fork: false, archived: true },
-    ]),
-    // Code search, as recorded, does not answer for the archived repository.
-    'https://api.github.com/repos/atlas-org/archived/commits/main': ok({ sha: COMMIT }),
-    [`https://api.github.com/repos/atlas-org/archived/git/trees/${COMMIT}?recursive=1`]: ok({
-      truncated: false,
-      tree: [{ path: 'skills/old/SKILL.md', mode: '100644', type: 'blob', sha: 'a' }],
-    }),
-    [`https://raw.githubusercontent.com/atlas-org/archived/${COMMIT}/skills/old/SKILL.md`]: ok('---\nname: old\ndescription: Kept for the record.\n---\n'),
+    'https://api.github.com/users/atlas-org/repos?per_page=100&page=1': ok([...listed, { full_name: id, default_branch: 'main', fork: false }]),
+    'https://api.github.com/graphql': graphql({ ...ATLAS_ORG, [id]: { commit: COMMIT, places } }),
+    [`https://api.github.com/repos/${id}/git/trees/${COMMIT}?recursive=1`]: ok({ sha: 'tree', truncated: false, tree }),
+    [`https://api.github.com/repos/${id}/git/trees/main?recursive=1`]: ok({ sha: COMMIT, truncated: false, tree }),
+    [`https://api.github.com/repos/${id}/commits/main`]: ok({ sha: COMMIT, commit: { tree: { sha: 'tree' } } }),
+    ...Object.fromEntries(Object.entries(files).map(([path, text]) => [`https://raw.githubusercontent.com/${id}/${COMMIT}/${path}`, ok(text)])),
+    ...extra,
   };
-  const expected = ORGANIZATION.replace('atlas-org · 4 skills in 2 repositories', 'atlas-org · 5 skills in 3 repositories').replace(
+}
+
+test('organization: a repository code search leaves out, with a skill folder at a usual place, is scanned whole with a token, as without', async () => {
+  // Archived, or long inactive, or as getsentry/plugin-grok was live: absent from the search's answer.
+  const recording = withRepository('archived', ['skills'], {
+    'skills/old/SKILL.md': '---\nname: old\ndescription: Kept for the record.\n---\n',
+    'docs/more/SKILL.md': '---\nname: more\ndescription: Outside the folder.\n---\n',
+  });
+  const expected = ORGANIZATION.replace('atlas-org · 4 skills in 2 repositories', 'atlas-org · 6 skills in 3 repositories').replace(
     '\natlas-org/gamma · 2 skills',
-    ['', 'atlas-org/archived · 1 skill', 'old — Kept for the record.', `  https://github.com/atlas-org/archived/blob/${COMMIT}/skills/old/SKILL.md`, '', 'atlas-org/gamma · 2 skills'].join('\n'),
+    [
+      '',
+      'atlas-org/archived · 2 skills',
+      'more — Outside the folder.',
+      `  https://github.com/atlas-org/archived/blob/${COMMIT}/docs/more/SKILL.md`,
+      'old — Kept for the record.',
+      `  https://github.com/atlas-org/archived/blob/${COMMIT}/skills/old/SKILL.md`,
+      '',
+      'atlas-org/gamma · 2 skills',
+    ].join('\n'),
   );
   const withToken = github(recording);
-  const withoutToken = github(recording);
   const scanned = await atlas(['scan', 'https://github.com/atlas-org'], { fetch: withToken.fetch, token: 'secret' });
   assert.equal(scanned.code, 0, scanned.stderr);
   assert.equal(scanned.stdout, expected);
-  assert.deepEqual(scanned, await atlas(['scan', 'https://github.com/atlas-org'], { fetch: withoutToken.fetch }));
-  assert.ok(withToken.requests.some((request) => request.url.includes('/search/code?')));
+  assert.deepEqual(scanned, await atlas(['scan', 'https://github.com/atlas-org'], { fetch: github(recording).fetch }));
 });
 
-test('organization, with a token: an active repository that code search does not answer for is scanned too', async () => {
+test('organization, with a token: a repository code search leaves out, with skills only elsewhere, is not read; without a token it is', async () => {
+  const recording = withRepository('elsewhere', [], { 'docs/deep/SKILL.md': '---\nname: deep\ndescription: Far from the usual places.\n---\n' });
+  const withToken = github(recording);
+  const scanned = await atlas(['scan', 'https://github.com/atlas-org'], { fetch: withToken.fetch, token: 'secret' });
+  assert.equal(scanned.stdout, ORGANIZATION);
+  assert.ok(!withToken.requests.some((request) => request.url.includes('/repos/atlas-org/elsewhere/')));
+
+  const complete = await atlas(['scan', 'https://github.com/atlas-org'], { fetch: github(recording).fetch });
+  assert.match(complete.stdout, /^atlas-org · 5 skills in 3 repositories\n/);
+  assert.match(complete.stdout, /\natlas-org\/elsewhere · 1 skill\ndeep — Far from the usual places\.\n/);
+});
+
+test('organization, with a token: a tree too large to list → the skill roots, what code search found, and a warning', async () => {
   const ok = (body: unknown) => ({ status: 200, body });
-  const listed = RECORDING['https://api.github.com/users/atlas-org/repos?per_page=100&page=1'].body as object[];
-  const { fetch, requests } = github({
+  const api = 'https://api.github.com/repos/atlas-org/gamma/git/trees';
+  const { fetch } = github({
     ...RECORDING,
-    'https://api.github.com/users/atlas-org/repos?per_page=100&page=1': ok([
-      ...listed,
-      // Not archived, pushed to last week, with skills, and yet absent from the search's answer:
-      // as getsentry/plugin-grok was, live, in `filename:SKILL.md user:getsentry`.
-      { full_name: 'atlas-org/active', default_branch: 'main', fork: false, archived: false, pushed_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() },
-    ]),
-    'https://api.github.com/repos/atlas-org/active/commits/main': ok({ sha: COMMIT }),
-    [`https://api.github.com/repos/atlas-org/active/git/trees/${COMMIT}?recursive=1`]: ok({
-      truncated: false,
-      tree: [{ path: 'skills/new/SKILL.md', mode: '100644', type: 'blob', sha: 'a' }],
-    }),
-    [`https://raw.githubusercontent.com/atlas-org/active/${COMMIT}/skills/new/SKILL.md`]: ok('---\nname: new\ndescription: Added last week.\n---\n'),
+    [`${api}/${GAMMA_COMMIT}?recursive=1`]: ok({ sha: 'gamma-tree', truncated: true, tree: [] }),
+    [`${api}/${GAMMA_COMMIT}`]: ok({ sha: 'gamma-tree', truncated: false, tree: [] }),
   });
   const result = await atlas(['scan', 'https://github.com/atlas-org'], { fetch, token: 'secret' });
-  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stdout, ORGANIZATION); // gamma's two skills, outside the skill roots, come from code search
   assert.equal(
-    result.stdout,
-    ORGANIZATION.replace('atlas-org · 4 skills in 2 repositories', 'atlas-org · 5 skills in 3 repositories').replace(
-      '\natlas-org/alpha · 2 skills',
-      ['', 'atlas-org/active · 1 skill', 'new — Added last week.', `  https://github.com/atlas-org/active/blob/${COMMIT}/skills/new/SKILL.md`, '', 'atlas-org/alpha · 2 skills'].join('\n'),
-    ),
+    result.stderr.split('\n')[0],
+    'warning: atlas-org/gamma: the tree is too large to list at once; looked only in .agents/skills, .claude/skills, .github/skills, agent/skills (and where code search finds a SKILL.md)',
   );
-  assert.ok(requests.some((request) => request.url.includes('/search/code?')));
 });
 
-test('organization, with a token, past its hourly limit → the message says when the limit resets', async () => {
+test('organization, with a token: 25 repositories a request; one GitHub cannot answer in time is asked for in halves', async () => {
+  const ok = (body: unknown) => ({ status: 200, body });
+  const names = Array.from({ length: 26 }, (_, index) => `r${index}`);
+  const known = graphql(Object.fromEntries(names.map((name) => [`wide/${name}`, { commit: COMMIT, places: name === 'r25' ? ['SKILL.md'] : [] }])));
+  const sizes: number[] = [];
+  const { fetch } = github({
+    'https://api.github.com/users/wide': ok({ login: 'wide', public_repos: 26 }),
+    'https://api.github.com/users/wide/repos?per_page=100&page=1': ok(names.map((name) => ({ full_name: `wide/${name}`, default_branch: 'main', fork: false }))),
+    'https://api.github.com/search/code?q=filename:SKILL.md+user:wide&per_page=100&page=1': ok({ total_count: 0, items: [] }),
+    'https://api.github.com/graphql': {
+      status: 200,
+      body: (request: string) => {
+        sizes.push(request.match(/:repository\(/g)!.length);
+        return (known.body as (request: string) => unknown)(request);
+      },
+    },
+    [`https://api.github.com/repos/wide/r25/git/trees/${COMMIT}?recursive=1`]: ok({ sha: 'tree', truncated: false, tree: [{ path: 'SKILL.md', mode: '100644', type: 'blob', sha: 'a' }] }),
+    [`https://raw.githubusercontent.com/wide/r25/${COMMIT}/SKILL.md`]: ok('---\nname: whole\ndescription: The whole repository.\n---\n'),
+  });
+  // GitHub gives up on a request about more than 20 repositories.
+  const slow: Fetch = async (url, init) =>
+    url.endsWith('/graphql') && init!.body!.match(/:repository\(/g)!.length > 20 ? new Response('<html>502 Bad Gateway</html>', { status: 502 }) : fetch(url, init);
+  const result = await atlas(['scan', 'https://github.com/wide'], { fetch: slow, token: 'secret' });
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stdout.split('\n')[0], 'wide · 1 skill in 1 repository');
+  assert.deepEqual(sizes.sort((a, b) => a - b), [1, 12, 13]); // 25 → 13 + 12, and the 26th
+
+  // One repository GitHub cannot answer for at all: the scan stops with its message.
+  const down: Fetch = async (url, init) => (url.endsWith('/graphql') ? new Response('', { status: 502 }) : fetch(url, init));
+  assert.deepEqual(await atlas(['scan', 'https://github.com/wide'], { fetch: down, token: 'secret' }), {
+    code: 1,
+    stdout: '',
+    stderr: 'GitHub answered 502 for https://api.github.com/graphql',
+  });
+});
+
+test('organization, with a token, past its limits → the message says when to try again', async () => {
   const recorded = github().fetch;
   const reset = Math.floor(Date.now() / 1000) + 30 * 60;
-  const fetch: Fetch = async (url, init) =>
-    url === 'https://api.github.com/repos/atlas-org/beta/commits/main'
+  const limited: Fetch = async (url, init) =>
+    url === `https://api.github.com/repos/atlas-org/gamma/git/trees/${GAMMA_COMMIT}?recursive=1`
       ? new Response(JSON.stringify({ message: 'API rate limit exceeded for user ID 1.' }), {
           status: 403,
           headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(reset) },
         })
       : recorded(url, init);
-  assert.deepEqual(await atlas(['scan', 'https://github.com/atlas-org'], { fetch, token: 'secret' }), {
+  assert.deepEqual(await atlas(['scan', 'https://github.com/atlas-org'], { fetch: limited, token: 'secret' }), {
     code: 1,
     stdout: '',
     stderr: 'GitHub rate limit reached; try again in 30 minutes',
   });
-});
 
-test('organization, with a token, a limit that resets within a minute → try again in a minute', async () => {
-  const recorded = github().fetch;
-  const reset = Math.floor(Date.now() / 1000) + 30;
-  const fetch: Fetch = async (url, init) =>
-    url === 'https://api.github.com/repos/atlas-org/beta/commits/main'
+  // A limit that resets within a minute.
+  const soon: Fetch = async (url, init) =>
+    url === `https://api.github.com/repos/atlas-org/gamma/git/trees/${GAMMA_COMMIT}?recursive=1`
       ? new Response(JSON.stringify({ message: 'API rate limit exceeded for user ID 1.' }), {
           status: 403,
-          headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(reset) },
+          headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(Math.floor(Date.now() / 1000) + 30) },
         })
       : recorded(url, init);
+  assert.deepEqual(await atlas(['scan', 'https://github.com/atlas-org'], { fetch: soon, token: 'secret' }), {
+    code: 1,
+    stdout: '',
+    stderr: 'GitHub rate limit reached; try again in a minute',
+  });
+
+  // GraphQL says it in a 200 answer.
+  const { fetch } = github({
+    ...RECORDING,
+    'https://api.github.com/graphql': { status: 200, body: { errors: [{ type: 'RATE_LIMITED', message: 'API rate limit exceeded for user ID 1.' }] } },
+  });
   assert.deepEqual(await atlas(['scan', 'https://github.com/atlas-org'], { fetch, token: 'secret' }), {
     code: 1,
     stdout: '',
@@ -180,49 +285,61 @@ test('organization, with a token, a limit that resets within a minute → try ag
   });
 });
 
-test('organization: the repository list is read page by page', async () => {
-  const repositories = Array.from({ length: 101 }, (_, index) => ({
+test('organization: the pages of the repository list are asked for together, and beyond the count the owner gives', async () => {
+  const repositories = Array.from({ length: 201 }, (_, index) => ({
     full_name: `many/r${index}`,
     default_branch: 'main',
-    fork: index !== 100, // only the last one, on the second page, is scanned
+    fork: index !== 200, // only the last one, on the third page, is scanned
   }));
   const ok = (body: unknown) => ({ status: 200, body });
-  const { fetch } = github({
-    'https://api.github.com/users/many': ok({ login: 'many' }),
+  const { fetch, requests } = github({
+    // The count says two pages; there is one repository more.
+    'https://api.github.com/users/many': ok({ login: 'many', public_repos: 200 }),
     'https://api.github.com/users/many/repos?per_page=100&page=1': ok(repositories.slice(0, 100)),
-    'https://api.github.com/users/many/repos?per_page=100&page=2': ok(repositories.slice(100)),
-    'https://api.github.com/repos/many/r100/commits/main': ok({ sha: COMMIT }),
-    [`https://api.github.com/repos/many/r100/git/trees/${COMMIT}?recursive=1`]: ok({
+    'https://api.github.com/users/many/repos?per_page=100&page=2': ok(repositories.slice(100, 200)),
+    'https://api.github.com/users/many/repos?per_page=100&page=3': ok(repositories.slice(200)),
+    'https://api.github.com/repos/many/r200/git/trees/main?recursive=1': ok({
+      sha: COMMIT,
       truncated: false,
       tree: [{ path: 'SKILL.md', mode: '100644', type: 'blob', sha: 'a' }],
     }),
-    [`https://raw.githubusercontent.com/many/r100/${COMMIT}/SKILL.md`]: ok('---\nname: whole\ndescription: The whole repository.\n---\n'),
+    'https://api.github.com/repos/many/r200/commits/main': ok({ sha: COMMIT, commit: { tree: { sha: 'tree' } } }),
+    [`https://raw.githubusercontent.com/many/r200/${COMMIT}/SKILL.md`]: ok('---\nname: whole\ndescription: The whole repository.\n---\n'),
   });
   const result = await atlas(['scan', 'https://github.com/many'], { fetch });
   assert.equal(
     result.stdout,
-    ['many · 1 skill in 1 repository', '', 'many/r100 · 1 skill', 'whole — The whole repository.', `  https://github.com/many/r100/blob/${COMMIT}/SKILL.md`].join('\n'),
+    ['many · 1 skill in 1 repository', '', 'many/r200 · 1 skill', 'whole — The whole repository.', `  https://github.com/many/r200/blob/${COMMIT}/SKILL.md`].join('\n'),
   );
+  assert.equal(requests.filter((request) => request.url.startsWith('https://api.github.com/')).length, 6);
 });
 
-test('organization, with a token: more than 1000 files → the first 1000 and a warning', async () => {
+test('organization, with a token: more than 1000 files in the search → a warning; a repository found is still read whole', async () => {
+  const ok = (body: unknown) => ({ status: 200, body });
+  const paths = Array.from({ length: 1234 }, (_, index) => `s${index}/SKILL.md`);
   const recording: Recording = {
-    'https://api.github.com/users/big': { status: 200, body: { login: 'big' } },
-    'https://api.github.com/users/big/repos?per_page=100&page=1': { status: 200, body: [{ full_name: 'big/skills', default_branch: 'main', fork: false }] },
-    'https://api.github.com/repos/big/skills/commits/HEAD': { status: 200, body: { sha: COMMIT } },
+    'https://api.github.com/users/big': ok({ login: 'big', public_repos: 1 }),
+    'https://api.github.com/users/big/repos?per_page=100&page=1': ok([{ full_name: 'big/skills', default_branch: 'main', fork: false }]),
+    'https://api.github.com/graphql': graphql({ 'big/skills': { commit: COMMIT } }),
+    [`https://api.github.com/repos/big/skills/git/trees/${COMMIT}?recursive=1`]: ok({
+      sha: 'tree',
+      truncated: false,
+      tree: paths.map((path) => ({ path, mode: '100644', type: 'blob', sha: path })),
+    }),
+    ...Object.fromEntries(paths.map((path) => [`https://raw.githubusercontent.com/big/skills/${COMMIT}/${path}`, ok(`---\nname: ${path.split('/')[0]}\n---\n`)])),
   };
   for (let page = 1; page <= 10; page++) {
-    const items = Array.from({ length: 100 }, (_, index) => ({ path: `s${page}-${index}/SKILL.md`, repository: { full_name: 'big/skills' } }));
-    recording[`https://api.github.com/search/code?q=filename:SKILL.md+user:big&per_page=100&page=${page}`] = { status: 200, body: { total_count: 1234, items } };
-    for (const { path } of items) {
-      recording[`https://raw.githubusercontent.com/big/skills/${COMMIT}/${path}`] = { status: 200, body: `---\nname: ${path.split('/')[0]}\n---\n` };
-    }
+    const items = paths.slice((page - 1) * 100, page * 100).map((path) => ({ path, repository: { full_name: 'big/skills' } }));
+    recording[`https://api.github.com/search/code?q=filename:SKILL.md+user:big&per_page=100&page=${page}`] = ok({ total_count: 1234, items });
   }
   const { fetch } = github(recording);
   const result = await atlas(['scan', 'https://github.com/big'], { fetch, token: 'secret' });
   assert.equal(result.code, 0, result.stderr);
-  assert.equal(result.stdout.split('\n')[0], 'big · 1000 skills in 1 repository');
-  assert.equal(result.stderr, 'warning: code search answers with at most 1000 files of 1234; the rest are not scanned');
+  assert.equal(result.stdout.split('\n')[0], 'big · 1234 skills in 1 repository');
+  assert.equal(
+    result.stderr,
+    'warning: code search answers with at most 1000 files of 1234; a repository among the rest is scanned only with a skill folder at a usual place',
+  );
 });
 
 test('organization without skills → 0 skills in 0 repositories, exit code 0', async () => {
