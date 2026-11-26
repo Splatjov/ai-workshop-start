@@ -14,16 +14,26 @@ its name, description or path, in any case. No words → every skill. The scan i
 what is shown differs
 ## Organization
 - The same scan, for each repository; the result lists the repositories *that have skills*, by id
-- With and without `GITHUB_TOKEN`, the *same result*: the repository list says which there are
-- Without: each one's tree, 8 at a time: two requests a repository, so GitHub's limit of 60 an
-  hour is reached past some 25 repositories → the rate limit message
-- With: one code search over all of them, at most 1000 files; more → a *warning*. Code search
-  leaves out archived and long inactive repositories, and at times an active one: each
-  repository it does not answer for is read through its tree, as without a token
-- Past the token's limit of 5000 requests an hour (two a repository read through its tree, so
-  past some 2400 repositories without skills) →
-  the scan stops with `GitHub rate limit reached; try again in N minutes`, N from GitHub's
-  answer; `try again in a minute` when the limit resets within one, or GitHub does not say when
+- **Few requests**: the repository list, 100 a page, the pages asked for together; then
+  - Without `GITHUB_TOKEN`: *one request a repository*, its tree by the branch's name, 8 at a
+    time; one more, the commit, only where the tree has a `SKILL.md`. Complete: a skill anywhere
+    is found. GitHub's limit of 60 an hour is reached past some 50 repositories → the rate limit
+    message. A push between the two requests, a tree too large → the repository is read again
+    at its commit
+  - With: one code search over all of them (at most 1000 files; more → a *warning*), and *one
+    request for every 25 repositories* (GraphQL) that says each one's commit and whether a usual
+    skill place is at its top: `SKILL.md`, `skills`, `.agents/skills`, `.claude/skills`,
+    `.github/skills`, `agent/skills`. Only a repository that the search answers for, or that
+    has such a place, is read, whole, through its tree: one request. A tree listed whole is
+    what is scanned: a file only the search still lists (its index is behind the branch) is not
+    read, and gives no warning. A repository without skills costs none of its own. `getsentry`, 637 repositories: some 100 requests, not 1200
+  - With a token, *not found*: skills only outside the usual places, in a repository code
+    search does not answer for (archived, long inactive, at times an active one). Speed is
+    chosen over these; without a token they are found
+  - A request for 25 repositories that GitHub cannot answer in time is asked for in halves
+- Past a limit with a token → the scan stops with `GitHub rate limit reached; try again in N
+  minutes`, N from GitHub's answer; `try again in a minute` when the limit resets within one, or
+  GitHub does not say when
 - Forks and empty repositories are not scanned
 - A warning names its repository: `<owner>/<repo>: <warning>`
 - Unknown organization → a clear message, exit code 1
@@ -47,7 +57,7 @@ Skill: id = `repo:path`, name, description, commit. Organization → repository 
 - A local directory skips `.git` and `node_modules`
 - No `SKILL.md` → `0 skills`, exit code 0
 - Without `GITHUB_TOKEN`, a tree too large for one answer → only the skill roots, and a *warning*;
-  with it too, for an organization's repository that code search does not answer for
+  with it too, for an organization's repository, together with what code search found there
 - Listed, but gone at the scanned commit → skipped, with a *warning*
 ## End-to-end tests
 Real repositories, each pinned to a commit: `npm run test:e2e`, in CI too

@@ -3,7 +3,10 @@ import { SKILL_ROOTS } from './find.ts';
 import { pooled, type OrganizationSource, type Source } from './scan.ts';
 
 /** The part of `fetch` the core uses, so tests and the browser can pass their own. */
-export type Fetch = (url: string, init?: { headers?: Record<string, string> }) => Promise<Response>;
+export type Fetch = (
+  url: string,
+  init?: { method?: string; headers?: Record<string, string>; body?: string },
+) => Promise<Response>;
 
 export type GitHubOptions = {
   fetch: Fetch;
@@ -69,7 +72,7 @@ async function openRepository(github: Client, info: RepositoryInfo, ref: string 
     : options.token
       ? 'code search does not cover this repository'
       : (options.tokenSource ?? ENVIRONMENT).search;
-  const paths = search ? await searchPaths(github, id) : await treePaths(github, id, sha, warnings, hint);
+  const paths = search ? await searchPaths(github, id) : (await treePaths(github, id, sha, warnings, hint)).paths;
   return source(github, id, sha, paths, warnings);
 }
 
@@ -87,62 +90,142 @@ function source(github: Client, id: string, sha: string, paths: string[], warnin
 const AT_ONCE = 8;
 
 /**
- * Every repository of an organization, or of a user, at its default branch: the repository list,
- * then each one's tree. With a token, one code search over all of them first, and the tree only
- * of those it does not answer for. Forks are not scanned.
+ * Every repository of an organization, or of a user, at its default branch. Forks are not
+ * scanned. Without a token, each one's tree. With one, only the trees of the repositories that
+ * may have skills: those code search answers for, and those with a skill folder at a usual place.
  */
 async function openOrganization(github: Client, owner: string, options: GitHubOptions): Promise<OrganizationSource> {
-  const { login } = await github.json<{ login: string }>(
+  const { login, public_repos } = await github.json<{ login: string; public_repos?: number }>(
     `${API}/users/${owner}`,
     `Organization not found: https://github.com/${owner}`,
   );
   const warnings: string[] = [];
-  const listed = await listOrganization(github, login);
-  const searched = options.token ? await searchOrganization(github, login, warnings) : [];
-  // Code search leaves out archived and long inactive repositories: their trees are read, as without a token.
-  const known = new Set(searched.map((found) => found.repository.id));
-  const rest = listed.filter((repository) => !repository.fork && !known.has(repository.full_name));
-  const repositories = [...searched, ...(await openListed(github, rest, options))];
-  return { organization: { id: login, url: `https://github.com/${login}` }, repositories, warnings };
+  const listed = (await listOrganization(github, login, public_repos ?? 0)).filter((repository) => !repository.fork);
+  const repositories = options.token
+    ? await openCandidates(github, login, listed, warnings)
+    : await pooled(listed, AT_ONCE, (info) => openListed(github, info, options));
+  return {
+    organization: { id: login, url: `https://github.com/${login}` },
+    repositories: repositories.filter((opened) => opened !== undefined),
+    warnings,
+  };
 }
 
-/** Code search over all of the owner's repositories: only those with a SKILL.md come back. */
-async function searchOrganization(github: Client, login: string, warnings: string[]): Promise<Source[]> {
+type ListedRepository = RepositoryInfo & { fork: boolean };
+
+/** Every repository the owner has, forks included, 100 a page; the pages are asked for together. */
+async function listOrganization(github: Client, login: string, count: number): Promise<ListedRepository[]> {
+  const page = (number: number) => github.json<ListedRepository[]>(`${API}/users/${login}/repos?per_page=100&page=${number}`);
+  const numbers = Array.from({ length: Math.max(1, Math.ceil(count / 100)) }, (_, index) => index + 1);
+  const pages = await pooled(numbers, AT_ONCE, page);
+  // More repositories than the owner's count said: go on, page by page.
+  while (pages.at(-1)!.length === 100) pages.push(await page(pages.length + 1));
+  return pages.flat();
+}
+
+/**
+ * Without a token, one request for a repository without skills: its tree, by the branch's name.
+ * Only one with a SKILL.md is asked for its commit too. Empty repositories are left out.
+ */
+async function openListed(github: Client, info: RepositoryInfo, options: GitHubOptions): Promise<Source | undefined> {
+  const id = info.full_name;
+  try {
+    const tree = await github.json<Tree>(`${API}/repos/${id}/git/trees/${encodeURIComponent(info.default_branch)}?recursive=1`).catch((error: unknown) => {
+      if (error instanceof EmptyRepository) throw error;
+      return undefined; // asked again below, by the commit
+    });
+    if (tree && !tree.truncated) {
+      const paths = files(tree);
+      if (!paths.some(isSkill)) return undefined;
+      const commit = await github.json<{ sha: string; commit: { tree: { sha: string } } }>(
+        `${API}/repos/${id}/commits/${encodePath(info.default_branch)}`,
+      );
+      // The same tree: nothing was pushed in between. Asked for by a branch, GitHub answers
+      // with the commit's sha, not the tree's.
+      if (tree.sha === commit.sha || tree.sha === commit.commit.tree.sha) return source(github, id, commit.sha, paths, []);
+    }
+    // A tree too large for one answer, a branch the tree cannot be asked for by name, a push in between.
+    return await openRepository(github, info, undefined, options, false);
+  } catch (error) {
+    if (error instanceof EmptyRepository) return undefined;
+    throw error;
+  }
+}
+
+const isSkill = (path: string) => path.split('/').at(-1) === 'SKILL.md';
+
+/** Where a repository with skills usually has them, from its top: one of these is there. */
+const PROBES = ['SKILL.md', 'skills', ...SKILL_ROOTS];
+
+/** How many repositories one GraphQL request asks about: more, and GitHub does not answer in time. */
+const PROBED_AT_ONCE = 25;
+
+type Probed = {
+  nameWithOwner: string;
+  isEmpty: boolean;
+  defaultBranchRef: { target: { oid: string } } | null;
+} & Record<string, unknown>;
+
+/**
+ * With a token: one code search over all the repositories, and for each 25 of them one request
+ * that says their commit and whether a usual skill place is there. Only a repository with either
+ * is read, whole, through its tree; the others cost no request of their own.
+ */
+async function openCandidates(github: Client, login: string, listed: ListedRepository[], warnings: string[]): Promise<(Source | undefined)[]> {
+  const batches: ListedRepository[][] = [];
+  for (let index = 0; index < listed.length; index += PROBED_AT_ONCE) batches.push(listed.slice(index, index + PROBED_AT_ONCE));
+  const [searched, probed] = await Promise.all([
+    searchOrganization(github, login, warnings),
+    pooled(batches, AT_ONCE, (batch) => probe(github, batch)),
+  ]);
+  const candidates = probed.flat().filter(
+    (repository) =>
+      !repository.isEmpty &&
+      repository.defaultBranchRef &&
+      (searched.has(repository.nameWithOwner) || PROBES.some((_, index) => repository[`p${index}`])),
+  );
+  return pooled(candidates, AT_ONCE, async (repository) => {
+    const id = repository.nameWithOwner;
+    const sha = repository.defaultBranchRef!.target.oid;
+    const own: string[] = [];
+    const { paths, whole } = await treePaths(github, id, sha, own, 'and where code search finds a SKILL.md');
+    // A tree listed whole has every file, and the search's index may be behind it. Code search
+    // adds only what a tree too large to list leaves out.
+    return source(github, id, sha, whole ? paths : [...new Set([...paths, ...(searched.get(id) ?? [])])], own);
+  });
+}
+
+/** One GraphQL request for a batch; a batch GitHub cannot answer in time is asked for in halves. */
+async function probe(github: Client, batch: ListedRepository[]): Promise<Probed[]> {
+  const places = PROBES.map((path, index) => `p${index}:object(expression:${JSON.stringify(`HEAD:${path}`)}){__typename}`).join(' ');
+  const repositories = batch.map((repository, index) => {
+    const [owner, name] = repository.full_name.split('/');
+    return `r${index}:repository(owner:${JSON.stringify(owner)},name:${JSON.stringify(name)}){nameWithOwner isEmpty defaultBranchRef{target{oid}} ${places}}`;
+  });
+  try {
+    const data = await github.graphql<Record<string, Probed | null>>(`{${repositories.join(' ')}}`);
+    // Null: a repository that went away since it was listed.
+    return Object.values(data).filter((repository) => repository !== null);
+  } catch (error) {
+    if (!(error instanceof TimedOut) || batch.length === 1) throw error;
+    const half = Math.ceil(batch.length / 2);
+    return (await Promise.all([probe(github, batch.slice(0, half)), probe(github, batch.slice(half))])).flat();
+  }
+}
+
+/** Code search over all of the owner's repositories: the SKILL.md paths it knows, by repository. */
+async function searchOrganization(github: Client, login: string, warnings: string[]): Promise<Map<string, Set<string>>> {
   const found = await searchCode<{ path: string; repository: { full_name: string } }>(github, `user:${login}`, warnings);
   const paths = new Map<string, Set<string>>(); // pages can repeat a result
   for (const item of found) {
     const id = item.repository.full_name;
     paths.set(id, (paths.get(id) ?? new Set()).add(item.path));
   }
-  return pooled([...paths], AT_ONCE, async ([id, files]) => {
-    const { sha } = await github.json<{ sha: string }>(`${API}/repos/${id}/commits/HEAD`);
-    return source(github, id, sha, [...files], []);
-  });
+  return paths;
 }
 
-type ListedRepository = RepositoryInfo & { fork: boolean };
-
-/** Every repository the owner has, forks included, 100 a page. */
-async function listOrganization(github: Client, login: string): Promise<ListedRepository[]> {
-  const repositories: ListedRepository[] = [];
-  for (let page = 1; ; page++) {
-    const answer = await github.json<ListedRepository[]>(`${API}/users/${login}/repos?per_page=100&page=${page}`);
-    repositories.push(...answer);
-    if (answer.length < 100) break;
-  }
-  return repositories;
-}
-
-/** Each repository listed through its tree; empty ones are left out. */
-async function openListed(github: Client, repositories: RepositoryInfo[], options: GitHubOptions): Promise<Source[]> {
-  const sources = await pooled(repositories, AT_ONCE, (info) =>
-    openRepository(github, info, undefined, options, false).catch((error: unknown) => {
-      if (error instanceof EmptyRepository) return undefined;
-      throw error;
-    }),
-  );
-  return sources.filter((opened) => opened !== undefined);
-}
+/** GitHub gave up on a request that took it too long. */
+class TimedOut extends AtlasError {}
 
 /** A repository without a commit: nothing to scan. */
 class EmptyRepository extends AtlasError {}
@@ -163,17 +246,17 @@ async function searchCode<T>(github: Client, scope: string, warnings: string[]):
     );
     items.push(...result.items);
     if (result.items.length < 100 || page * 100 >= result.total_count) break;
-    if (page === 10) warnings.push(`code search answers with at most 1000 files of ${result.total_count}; the rest are not scanned`);
+    if (page === 10) warnings.push(`code search answers with at most 1000 files of ${result.total_count}; a repository among the rest is scanned only with a skill folder at a usual place`);
   }
   return items;
 }
 
-type Tree = { truncated: boolean; tree: { path: string; mode: string; type: string; sha: string }[] };
+type Tree = { sha: string; truncated: boolean; tree: { path: string; mode: string; type: string; sha: string }[] };
 
-/** The whole tree at once, or only the skill roots when it is too large for one answer. */
-async function treePaths(github: Client, id: string, sha: string, warnings: string[], hint: string): Promise<string[]> {
+/** The whole tree at once, or only the skill roots when it is too large for one answer: not `whole`. */
+async function treePaths(github: Client, id: string, sha: string, warnings: string[], hint: string): Promise<{ paths: string[]; whole: boolean }> {
   const tree = await github.json<Tree>(`${API}/repos/${id}/git/trees/${sha}?recursive=1`);
-  if (!tree.truncated) return files(tree);
+  if (!tree.truncated) return { paths: files(tree), whole: true };
   warnings.push(`the tree is too large to list at once; looked only in ${SKILL_ROOTS.join(', ')} (${hint})`);
   const paths: string[] = [];
   for (const root of SKILL_ROOTS) {
@@ -182,7 +265,7 @@ async function treePaths(github: Client, id: string, sha: string, warnings: stri
     const subtree = await github.json<Tree>(`${API}/repos/${id}/git/trees/${rootSha}?recursive=1`);
     paths.push(...files(subtree).map((path) => `${root}/${path}`));
   }
-  return paths;
+  return { paths, whole: false };
 }
 
 /** Walks down one level at a time; the directory's tree, or undefined if it does not exist. */
@@ -209,7 +292,7 @@ function client({ fetch, token, tokenSource = ENVIRONMENT }: GitHubOptions) {
   if (token) headers.Authorization = `Bearer ${token}`;
   const answers = new Map<string, Promise<unknown>>(); // the root tree is asked for once per skill root
 
-  async function get(url: string, init?: { headers: Record<string, string> }): Promise<Response> {
+  async function get(url: string, init?: Parameters<Fetch>[1]): Promise<Response> {
     try {
       return await fetch(url, init);
     } catch (error) {
@@ -217,9 +300,11 @@ function client({ fetch, token, tokenSource = ENVIRONMENT }: GitHubOptions) {
     }
   }
 
-  async function request(url: string, notFound: string): Promise<unknown> {
-    const response = await get(url, { headers });
-    if (response.ok) return response.json();
+  /** The answer, when GitHub gives one; its headers say when a limit resets. */
+  async function send(url: string, notFound: string, post?: string): Promise<Response> {
+    const response = await get(url, post === undefined ? { headers } : { method: 'POST', headers, body: post });
+    if (response.ok) return response;
+    if (response.status === 502 || response.status === 504) throw new TimedOut(`GitHub answered ${response.status} for ${url}`);
     const body: unknown = await response.json().catch(() => undefined);
     const message = (body as { message?: unknown } | undefined)?.message;
     const text = typeof message === 'string' ? message : '';
@@ -232,11 +317,29 @@ function client({ fetch, token, tokenSource = ENVIRONMENT }: GitHubOptions) {
     throw new AtlasError(`GitHub answered ${response.status} for ${url}${text && `: ${text}`}`);
   }
 
+  async function request(url: string, notFound: string): Promise<unknown> {
+    return (await send(url, notFound)).json();
+  }
+
   return {
     /** A GitHub API answer; `notFound` explains a 404. */
     json<T>(url: string, notFound = `Not found on GitHub: ${url}`): Promise<T> {
       if (!answers.has(url)) answers.set(url, request(url, notFound));
       return answers.get(url) as Promise<T>;
+    },
+    /** A GraphQL answer's data; needs a token. */
+    async graphql<T>(query: string): Promise<T> {
+      const url = `${API}/graphql`;
+      const response = await send(url, `Not found on GitHub: ${url}`, JSON.stringify({ query }));
+      const answer = (await response.json()) as {
+        data?: T;
+        errors?: { type?: string; message?: string }[];
+      };
+      if (answer.data) return answer.data;
+      const [error] = answer.errors ?? [];
+      // A used-up limit is a 200 here, with the headers of a REST answer past its limit.
+      if (error?.type === 'RATE_LIMITED') throw new AtlasError(`GitHub rate limit reached; try again in ${wait(response)}`);
+      throw new AtlasError(`GitHub answered ${url} with an error${error?.message ? `: ${error.message}` : ''}`);
     },
     /** A file's bytes at the scanned commit, or undefined if it is not there. */
     async raw(url: string): Promise<Uint8Array | undefined> {
