@@ -24,7 +24,7 @@ import {
   DrawablyInput,
   DrawablyToggle,
 } from 'drawably/react';
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react';
 import { flushSync } from 'react-dom';
 import type { ScanView, SkillView } from '../src/browser.ts';
 import { EXAMPLES } from './examples.ts';
@@ -59,11 +59,15 @@ export function App({ backend }: { backend: Backend }) {
 
   const scanned = view && 'skills' in view ? view : undefined;
   const chart = useMemo(() => scanned && chartOf(scanned), [scanned]);
+  // Only the latest scan shows: an earlier one that answers later is dropped.
+  const latest = useRef(0);
 
   async function scan(url: string) {
     if (!url.trim()) return;
+    const id = ++latest.current;
     setScanning(true);
     const result = await backend.scan(url);
+    if (id !== latest.current) return;
     setView(result);
     setSelected('skills' in result ? result.skills[0]?.id : undefined);
     setPointed(undefined);
@@ -86,6 +90,14 @@ export function App({ backend }: { backend: Backend }) {
   function submit(event: FormEvent) {
     event.preventDefault();
     chartIt(input);
+  }
+
+  function pick(event: MouseEvent, url: string) {
+    // Ctrl/Cmd-, Shift-, Alt-click: the browser's own (a new tab, a window, a download).
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    setInput(url);
+    chartIt(url);
   }
 
   return (
@@ -158,23 +170,21 @@ export function App({ backend }: { backend: Backend }) {
           </form>
 
           {!scanned && (
-            <p className="examples">
+            <nav className="examples" aria-label="Examples">
               <span>or chart one of these</span>
-              {EXAMPLES.map((repository) => (
-                <DrawablyButton
-                  key={repository}
-                  type="button"
-                  disabled={scanning}
-                  onClick={() => {
-                    const url = `https://github.com/${repository}`;
-                    setInput(url);
-                    chartIt(url);
-                  }}
-                >
-                  {repository}
-                </DrawablyButton>
-              ))}
-            </p>
+              <ul>
+                {EXAMPLES.map((id) => {
+                  const url = `https://github.com/${id}`;
+                  return (
+                    <li key={id}>
+                      <a href={`?repo=${encodeURIComponent(url)}`} onClick={(event) => pick(event, url)}>
+                        {id}
+                      </a>
+                    </li>
+                  );
+                })}
+              </ul>
+            </nav>
           )}
 
           {view && 'error' in view && (

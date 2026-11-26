@@ -1,2 +1,12 @@
-/** Repositories to scan with one click, before anything is scanned. */
-export const EXAMPLES = ['JetBrains/kotlin', 'JetBrains/koog', 'anthropics/skills'];
+/** Repositories with skills, one click away, for a first look. */
+export const EXAMPLES = [
+  'anthropics/skills',
+  'obra/superpowers',
+  'vercel-labs/agent-skills',
+  'openai/codex',
+  'huggingface/skills',
+  'trailofbits/skills',
+  'getsentry/skills',
+  'JetBrains/kotlin',
+  'JetBrains/koog',
+] as const;

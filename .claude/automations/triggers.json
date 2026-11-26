@@ -1,0 +1,34 @@
+{
+  "Code Review": {
+    "automationId": "d6002f98-aedf-40f8-8d52-8129ca0f899e",
+    "promptFile": "code-review.prompt.md",
+    "triggers": [
+      {"triggerType": "EVENT", "source": "github", "eventType": "pull_request.opened", "filters": {"pr_author": "Splatjov", "is_pr_draft": "false"}},
+      {"triggerType": "EVENT", "source": "github", "eventType": "pull_request.synchronize", "filters": {"pr_author": "Splatjov", "is_pr_draft": "false"}},
+      {"triggerType": "EVENT", "source": "github", "eventType": "pull_request.ready_for_review", "filters": {"pr_author": "Splatjov"}},
+      {"triggerType": "EVENT", "source": "github", "eventType": "pull_request.opened", "filters": {"pr_author": "jetbrains-air[bot]", "is_pr_draft": "false"}},
+      {"triggerType": "EVENT", "source": "github", "eventType": "pull_request.synchronize", "filters": {"pr_author": "jetbrains-air[bot]", "is_pr_draft": "false"}},
+      {"triggerType": "EVENT", "source": "github", "eventType": "pull_request.ready_for_review", "filters": {"pr_author": "jetbrains-air[bot]"}}
+    ],
+    "triggerVcs": [
+      {"outputBehaviour": "read-only"}, {"outputBehaviour": "read-only"}, {"outputBehaviour": "read-only"},
+      {"outputBehaviour": "read-only"}, {"outputBehaviour": "read-only"}, {"outputBehaviour": "read-only"}
+    ]
+  },
+  "work after code review": {
+    "automationId": "388e2c7b-0f2f-49ae-b6df-8f44ae10e839",
+    "promptFile": "review-fix.prompt.md",
+    "triggers": [
+      {"triggerType": "EVENT", "source": "github", "eventType": "pull_request_review.submitted", "filters": {"review_state": "commented", "reviewer": "jetbrains-air[bot]", "is_pr_draft": "false"}}
+    ],
+    "triggerVcs": [{"outputBehaviour": "push-to-source"}]
+  },
+  "Issue start": {
+    "automationId": "66f061ce-0213-4e46-97fe-764d0e6e7003",
+    "promptFile": "issue-fix.prompt.md",
+    "triggers": [
+      {"triggerType": "EVENT", "source": "github", "eventType": "issues.opened", "filters": {"issue_author": "Splatjov"}}
+    ],
+    "triggerVcs": [{"sourceBranch": "main", "outputBehaviour": "create-pr"}]
+  }
+}

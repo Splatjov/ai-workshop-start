@@ -1,9 +1,8 @@
 // spec/web.md, "The sky": the globe, as a user sees and turns it, over recorded GitHub answers.
 import { expect, test, type Page } from '@playwright/test';
-import { EXAMPLES } from '../../web/examples.ts';
 import { chosen, recorded, scan, skillButtons } from './github.ts';
 import { ink, withoutWebGL } from './in-page.js';
-import { KOOG_MD, MANY_LONG_NAME, RECORDING } from './recording.ts';
+import { MANY_LONG_NAME, RECORDING } from './recording.ts';
 
 let errors: string[];
 
@@ -298,18 +297,6 @@ test('no WebGL → the page works without the sky', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/atlas-demo 3 skills');
   await skillButtons(page).filter({ hasText: 'commits' }).click();
   await expect(chosen(page)).toHaveAccessibleName('commits: SKILL.md');
-});
-
-test('nothing scanned yet: three repositories to scan with one click', async ({ page }) => {
-  await page.goto('./');
-  for (const example of EXAMPLES) await expect(page.getByRole('button', { name: example })).toBeVisible();
-
-  await page.getByRole('button', { name: 'JetBrains/koog' }).click();
-  await expect(page.getByLabel('Repository link')).toHaveValue('https://github.com/JetBrains/koog');
-  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/koog 1 skill');
-  await expect(chosen(page).getByLabel('SKILL.md')).toHaveText(KOOG_MD);
-  expect(new URL(page.url()).searchParams.get('repo')).toBe('https://github.com/JetBrains/koog');
-  for (const example of EXAMPLES) await expect(page.getByRole('button', { name: example })).toHaveCount(0);
 });
 
 test('the same commit, the same sky: a scan shared by its address draws the stars where they were', async ({ page }) => {

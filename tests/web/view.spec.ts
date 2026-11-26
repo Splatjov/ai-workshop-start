@@ -1,15 +1,17 @@
 // spec/web.md: the page, as a user sees it, over recorded GitHub answers.
-import { expect, test } from '@playwright/test';
-import { chosen, recorded, scan, skillButtons } from './github.ts';
+import { expect, test, type Locator } from '@playwright/test';
+import { chosen, recorded, scan, skillButtons, type Recorded } from './github.ts';
 import { starsInView } from './in-page.js';
 import { BROKEN_MD, COMMIT, COMMITS_MD, MANY_BIG_MD, MANY_ONE_LINE_MD, STYLE_MD } from './recording.ts';
 
 const blob = `https://github.com/JetBrains/atlas-demo/blob/${COMMIT}`;
 let requests: string[];
+let answered: string[];
 let errors: string[];
+let slow: Recorded['slow'];
 
 test.beforeEach(async ({ page }) => {
-  ({ requests, errors } = await recorded(page));
+  ({ requests, answered, errors, slow } = await recorded(page));
 });
 
 test.afterEach(() => expect(errors, 'errors in the page').toEqual([]));
@@ -178,4 +180,85 @@ test('?repo=<URL> scans at once; scanning writes it to the address', async ({ pa
   expect(new URL(page.url()).searchParams.get('repo')).toBe('https://github.com/JetBrains/empty');
   await page.reload();
   await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/empty 0 skills');
+});
+
+test('examples: nine repositories with skills, each a link that fills the field and scans it', async ({ page }) => {
+  await page.goto('./');
+  const examples = page.getByRole('navigation', { name: 'Examples' }).getByRole('link');
+  await expect(examples).toHaveText([
+    'anthropics/skills',
+    'obra/superpowers',
+    'vercel-labs/agent-skills',
+    'openai/codex',
+    'huggingface/skills',
+    'trailofbits/skills',
+    'getsentry/skills',
+    'JetBrains/kotlin',
+    'JetBrains/koog',
+  ]);
+  for (const example of await examples.all()) {
+    const id = await example.textContent();
+    await expect(example).toHaveAttribute('href', `?repo=${encodeURIComponent(`https://github.com/${id}`)}`);
+  }
+  expect(requests).toEqual([]);
+
+  await examples.filter({ hasText: 'JetBrains/koog' }).click();
+  await expect(page.getByLabel('Repository link')).toHaveValue('https://github.com/JetBrains/koog');
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/koog 1 skill');
+  await expect(chosen(page).getByRole('heading', { level: 3 })).toHaveText('commits');
+  expect(new URL(page.url()).searchParams.get('repo')).toBe('https://github.com/JetBrains/koog');
+});
+
+test('examples: Ctrl/Cmd-, Shift- and middle-click open a new tab or window, this page does not scan', async ({ page, context }) => {
+  await page.goto('./');
+  const koog = page.getByRole('navigation', { name: 'Examples' }).getByRole('link', { name: 'JetBrains/koog' });
+  const clicks: Parameters<Locator['click']>[0][] = [{ modifiers: ['ControlOrMeta'] }, { modifiers: ['Shift'] }, { button: 'middle' }];
+  for (const click of clicks) {
+    const opened = context.waitForEvent('page');
+    await koog.click(click);
+    const tab = await opened;
+    await expect(tab.getByRole('heading', { level: 2 })).toHaveText('JetBrains/koog 1 skill');
+    await tab.close();
+  }
+  await expect(page.getByLabel('Repository link')).toHaveValue('');
+  await expect(page.getByRole('region', { name: 'Scan result' })).toHaveCount(0);
+  expect(new URL(page.url()).searchParams.get('repo')).toBeNull();
+});
+
+test('a scan started while another runs wins, even when the earlier one answers later', async ({ page }) => {
+  const releaseDemo = slow('JetBrains/atlas-demo');
+  const releaseKoog = slow('JetBrains/koog');
+  const button = page.locator('form').getByRole('button');
+  const demoDone = () => answered.filter((url) => url.includes('/atlas-demo/') && url.endsWith('SKILL.md')).length;
+  await page.goto('./');
+  await scan(page, 'https://github.com/JetBrains/atlas-demo');
+  await expect(button).toHaveText(/Scanning…/);
+  await page.getByRole('navigation', { name: 'Examples' }).getByRole('link', { name: 'JetBrains/koog' }).click();
+
+  // The earlier scan ends first: it is not shown, and the page is still scanning.
+  releaseDemo();
+  await expect.poll(demoDone).toBe(4);
+  await expect(page.getByRole('region', { name: 'Scan result' })).toHaveCount(0);
+  await expect(button).toHaveText(/Scanning…/);
+  await expect(button).toBeDisabled();
+
+  releaseKoog();
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/koog 1 skill');
+  await expect(button).toHaveText(/Scan$/);
+  await expect(button).toBeEnabled();
+  await expect(page.getByLabel('Repository link')).toHaveValue('https://github.com/JetBrains/koog');
+  expect(new URL(page.url()).searchParams.get('repo')).toBe('https://github.com/JetBrains/koog');
+});
+
+test('a later scan that ends first stays shown when the earlier one answers', async ({ page }) => {
+  const releaseDemo = slow('JetBrains/atlas-demo');
+  await page.goto('./');
+  await scan(page, 'https://github.com/JetBrains/atlas-demo');
+  await page.getByRole('navigation', { name: 'Examples' }).getByRole('link', { name: 'JetBrains/koog' }).click();
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/koog 1 skill');
+
+  releaseDemo();
+  await expect.poll(() => answered.filter((url) => url.includes('/atlas-demo/') && url.endsWith('SKILL.md')).length).toBe(4);
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/koog 1 skill');
+  await expect(page.locator('form').getByRole('button')).toBeEnabled();
 });

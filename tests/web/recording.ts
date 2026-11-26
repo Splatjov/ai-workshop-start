@@ -9,7 +9,6 @@ const ok = (body: unknown) => ({ status: 200, body });
 export const COMMITS_MD = '---\nname: commits\ndescription: Write commit messages the way this repository does. Use for every commit.\n---\n# Commits\n\nOne line, then why.\n';
 export const STYLE_MD = '---\nname: code-style\ndescription: Follow the code style.\n---\n# Code style\n';
 export const BROKEN_MD = '---\nname: release: checklist: x\n---\n# Release\n';
-export const KOOG_MD = '---\nname: agents\ndescription: Build an agent with Koog.\n---\n# Agents\n';
 
 const blob = (path: string) => ({ path, mode: '100644', type: 'blob', sha: path });
 
@@ -58,11 +57,11 @@ export const RECORDING: Recording = {
   [`${API}/JetBrains/empty/commits/main`]: ok({ sha: COMMIT }),
   [`${API}/JetBrains/empty/git/trees/${COMMIT}?recursive=1`]: ok({ truncated: false, tree: [blob('README.md')] }),
 
-  // JetBrains/koog: one of the page's examples, with one skill.
+  // JetBrains/koog: one of the examples, with one skill.
   [`${API}/JetBrains/koog`]: ok({ full_name: 'JetBrains/koog', default_branch: 'develop' }),
   [`${API}/JetBrains/koog/commits/develop`]: ok({ sha: COMMIT }),
-  [`${API}/JetBrains/koog/git/trees/${COMMIT}?recursive=1`]: ok({ truncated: false, tree: [blob('.claude/skills/agents/SKILL.md')] }),
-  [`${RAW}/JetBrains/koog/${COMMIT}/.claude/skills/agents/SKILL.md`]: ok(KOOG_MD),
+  [`${API}/JetBrains/koog/git/trees/${COMMIT}?recursive=1`]: ok({ truncated: false, tree: [blob('.claude/skills/commits/SKILL.md')] }),
+  [`${RAW}/JetBrains/koog/${COMMIT}/.claude/skills/commits/SKILL.md`]: ok(COMMITS_MD),
 
   [`${API}/JetBrains/many`]: ok({ full_name: 'JetBrains/many', default_branch: 'main' }),
   [`${API}/JetBrains/many/commits/main`]: ok({ sha: COMMIT }),
