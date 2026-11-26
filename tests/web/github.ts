@@ -38,7 +38,8 @@ export async function recorded(page: Page, context: BrowserContext = page.contex
     await route.fulfill({
       status: answer.status,
       body: text(answer, route.request().postData() ?? ''),
-      headers: { 'access-control-allow-origin': '*' },
+      // As GitHub: code search answers without CORS headers, so a page cannot read it.
+      headers: url.startsWith('https://api.github.com/search/code') ? {} : { 'access-control-allow-origin': '*' },
     });
     answered.push(url);
   });

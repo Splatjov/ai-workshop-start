@@ -328,12 +328,15 @@ test('GitHub token: a password field; the next scan sends it to GitHub, and it i
   expect(authorizations.every((header) => header === undefined)).toBe(true);
   expect(requests.some((url) => url.includes('/search/'))).toBe(false);
 
-  // With one: every API request carries it, and code search finds the skills.
+  // With one: every API request carries it; still through the tree, as a page cannot read code search.
   authorizations.length = 0;
+  requests.length = 0;
   await token.fill('secret-token');
   await scan(page, 'https://github.com/JetBrains/koog');
-  await expect.poll(() => requests.some((url) => url.includes('/search/code?q=filename:SKILL.md+repo:JetBrains/koog'))).toBe(true);
+  await expect.poll(() => requests.some((url) => url.includes('/repos/JetBrains/koog/git/trees/'))).toBe(true);
   await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/koog 1 skill');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  expect(requests.some((url) => url.includes('/search/'))).toBe(false);
   expect(authorizations.length).toBeGreaterThan(0);
   expect(authorizations.every((header) => header === 'Bearer secret-token')).toBe(true);
 
@@ -370,17 +373,15 @@ test('organization: its skills under their repositories, the first one chosen; t
   await expect(chosen(page).getByLabel('SKILL.md')).toHaveText(GRADLE_MD);
 });
 
-test('organization, with a token: one code search, one request for the repositories’ skill places; unknown → the CLI’s message, as an alert', async ({ page }) => {
+test('organization, with a token: every repository’s tree, as without one, never code search; unknown → the CLI’s message, as an alert', async ({ page }) => {
   await page.goto('./');
   await page.getByLabel('GitHub token').fill('secret-token');
   await scan(page, 'github.com/atlas-org');
   await expect(page.getByRole('heading', { level: 2 })).toHaveText('atlas-org 4 skills in 2 repositories');
-  expect(requests).toContain('https://api.github.com/search/code?q=filename:SKILL.md+user:atlas-org&per_page=100&page=1');
-  expect(requests.filter((url) => url === 'https://api.github.com/graphql')).toHaveLength(1); // the five repositories, in one request
-  // A tree is read only where skills may be: beta, without any, costs no request of its own.
+  // Code search would find only what it indexes; the trees find every SKILL.md, the token only raises the limit.
+  expect(requests.some((url) => url.includes('/search/'))).toBe(false);
   expect(requests).toContain('https://api.github.com/users/atlas-org/repos?per_page=100&page=1');
-  expect(requests).toContain(`https://api.github.com/repos/atlas-org/alpha/git/trees/${COMMIT}?recursive=1`);
-  expect(requests.some((url) => url.includes('/repos/atlas-org/beta/'))).toBe(false);
+  expect(requests.some((url) => url.includes('/repos/atlas-org/beta/git/trees/'))).toBe(true);
   expect(authorizations.every((header) => header === 'Bearer secret-token')).toBe(true);
 
   await scan(page, 'https://github.com/no-such-org');

@@ -12,8 +12,10 @@ site in `web/dist`.
 - The same scan as the CLI (`createBrowserBackend().scan`), from the browser, over live GitHub;
   the same URLs, `/tree/<ref>` and `github.com/<owner>` included
 - **GitHub token**: a password field under the link, optional. The next scan sends it to GitHub,
-  as the CLI sends `GITHUB_TOKEN`: a higher rate limit, and code search. It lives in the page's
-  memory: *not* in the address, *not* stored, gone on reload. Empty → a scan without a token
+  as the CLI sends `GITHUB_TOKEN`, but for *a higher rate limit only*: GitHub's code search answers
+  without CORS headers, so a page cannot read it. With a token or without, the page lists every
+  repository through its tree, an organization's too. It lives in the page's memory: *not* in the
+  address, *not* stored, gone on reload. Empty → a scan without a token
 - A scan charts its repository's world, and the view goes to it
 - **Filter**: a field above the skills, once a scan has found some. As the CLI's `--filter`, while
   typing: only the matching skills are listed, the count reads `M of N skills`; the chosen skill
@@ -36,8 +38,8 @@ site in `web/dist`.
   the view stays over the system
 - The token's messages name the field, not the CLI's `GITHUB_TOKEN`: a token GitHub rejects →
   `GitHub rejected the token in the GitHub token field`; past the rate limit without a token →
-  `GitHub rate limit reached; fill in the GitHub token field`; a tree too large to list without
-  a token → the warning ends `(the GitHub token field searches everywhere)`
+  `GitHub rate limit reached; fill in the GitHub token field`; a tree too large to list, with a
+  token or without → the warning ends `(the CLI with GITHUB_TOKEN searches everywhere)`
 - No `SKILL.md` → `0 skills`, nothing to choose
 - Examples, under the field until a world is in view: `anthropics/skills`, `obra/superpowers`,
   `vercel-labs/agent-skills`, `openai/codex`, `huggingface/skills`, `trailofbits/skills`,
