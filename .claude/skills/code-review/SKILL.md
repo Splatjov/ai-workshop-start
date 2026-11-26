@@ -68,8 +68,10 @@ npm test
 A check you did not run is reported as `skipped (why)`, never as passing.
 Any failing command is a finding: quote the relevant output.
 
-For a PR, also check CI: `gh pr checks <n>`. On a freshly opened PR it is usually still pending —
-check again at the end of the review. Red is a finding; still pending is a note in the report.
+For a PR, also check CI: `gh pr checks <n>` (exit code 8 just means "some pending"). A push to a PR
+branch usually starts two runs (`push` and `pull_request`); both count. On a fresh push they are
+often still pending — check again at the end of the review. Red is a finding; still pending is a
+note in the report, with the run links.
 
 ## 4. Look for problems
 
@@ -86,8 +88,8 @@ In this order of importance:
      calls `preventDefault()` must still let Ctrl/Cmd/Shift-click open a new tab. Global CSS
      selectors that now hit new elements.
    - Facts the change asserts about the outside world (example repositories, URLs, counts):
-     check them for real, e.g. `./skill-atlas scan <URL> | head -1` for each listed repository
-     (with `GITHUB_TOKEN`), and say which ones you checked.
+     check them for real, e.g. `timeout 60 ./skill-atlas scan <URL> | head -1` for each listed
+     repository (with `GITHUB_TOKEN`), and say which ones you checked and what they returned.
    - A bug in old code that the change **newly makes reachable** (e.g. a race in `scan()` that was
      guarded by the disabled button, now reachable through a new link) is the change's finding:
      anchor it at the new code, not the old.
@@ -113,29 +115,84 @@ Before reporting, try to disprove each candidate:
 - Re-read the surrounding code; check whether another layer already handles it.
 - Prove it where possible: a failing command, a quick script against `fixture/`, or a concrete
   input → wrong output trace. Scratch files go in `/tmp`, never in the repo.
-- Web behavior: write a throwaway Playwright test (works as is, from the repository root):
-  ```bash
-  mkdir -p /tmp/rv && ln -sfn "$PWD/node_modules" /tmp/rv/node_modules
-  cat > /tmp/rv/pw.config.ts <<EOF
-  import { defineConfig, devices } from '@playwright/test';
-  export default defineConfig({
-    testDir: '/tmp/rv', testMatch: '*.spec.ts', reporter: 'list',
-    use: { baseURL: 'http://localhost:4173/' },
-    projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
-    webServer: { command: 'npx vite build web && npx vite preview web --port 4173 --strictPort',
-      cwd: '$PWD', url: 'http://localhost:4173/', reuseExistingServer: true },
+- Web behavior: run a throwaway Playwright probe. Copy this as is, from the repository root (the
+  heredocs expand `$PWD`, so don't put `${...}` in them), then adapt the lines marked `adapt`
+  (the block is unindented on purpose: an indented `EOF` does not end a heredoc):
+```bash
+mkdir -p /tmp/rv && ln -sfn "$PWD/node_modules" /tmp/rv/node_modules
+cat > /tmp/rv/pw.config.ts <<EOF
+import { defineConfig, devices } from '@playwright/test';
+export default defineConfig({
+  testDir: '/tmp/rv', testMatch: '*.spec.ts', reporter: 'list',
+  use: { baseURL: 'http://localhost:4173/' },
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  webServer: { command: 'npx vite build web && npx vite preview web --port 4173 --strictPort',
+    cwd: '$PWD', url: 'http://localhost:4173/', reuseExistingServer: true },
+});
+EOF
+cat > /tmp/rv/probe.spec.ts <<EOF
+import { test, type Page } from '@playwright/test';
+import { RECORDING } from '$PWD/tests/web/recording.ts';
+
+// GitHub from the recording, on the whole context (so a new tab gets it too).
+// Answers for SLOW are held until release(): the race happens every time, not by timing luck.
+const SLOW = /atlas-demo/;
+let release = () => {};
+let held = Promise.resolve();
+let slowPending = 0;
+test.beforeEach(async ({ context }) => {
+  held = new Promise<void>((r) => (release = r));
+  await context.route(/^https:\/\/(api\.github\.com|raw\.githubusercontent\.com)\//, async (route) => {
+    const url = route.request().url();
+    const a = RECORDING[url];
+    if (!a) return route.abort('internetdisconnected');
+    if (SLOW.test(url)) { slowPending++; await held; slowPending--; }
+    await route.fulfill({ status: a.status, body: typeof a.body === 'string' ? a.body : JSON.stringify(a.body),
+      headers: { 'access-control-allow-origin': '*' } });
   });
-  EOF
-  # /tmp/rv/probe.spec.ts: import { RECORDING } from '$PWD/tests/web/recording.ts', answer GitHub
-  #   with page.route(...) as tests/web/view.spec.ts does, console.log what you observe
-  npx playwright test -c /tmp/rv/pw.config.ts
-  ```
-  - Races: delay one repository's answers (`if (/atlas-demo/.test(url)) await new Promise(r =>
-    setTimeout(r, 800))` before `route.fulfill`), start that scan, start another through a different
-    entry point, wait, then log the field, `?repo=` and the `h2` — they must name the same repository.
-  - New tab: `const tab = context.waitForEvent('page', { timeout: 2000 })`, then
-    `click({ modifiers: ['ControlOrMeta'] })`, `{ modifiers: ['Shift'] }` and `{ button: 'middle' }`;
-    report which ones work (middle-click fires no `click`, so it usually works even when the others don't).
+});
+const state = async (page: Page) => JSON.stringify({
+  field: await page.getByLabel('Repository link').inputValue(),
+  repo: new URL(page.url()).searchParams.get('repo'),
+  h2: await page.getByRole('heading', { level: 2 }).textContent({ timeout: 500 }).catch(() => null),
+  button: (await page.getByRole('button', { name: /Scan/ }).textContent())?.trim(),
+});
+
+test('race: the last scan must win', async ({ page }) => {
+  await page.goto('./');
+  await page.getByLabel('Repository link').fill('https://github.com/JetBrains/atlas-demo');
+  await page.getByRole('button', { name: 'Scan' }).click();              // 1st scan, held
+  await page.getByRole('link', { name: 'JetBrains/koog' }).click();      // adapt: 2nd scan, another entry point
+  await page.getByRole('heading', { level: 2 }).waitFor();
+  console.log('BEFORE RELEASE', await state(page));
+  release();
+  await test.expect.poll(() => slowPending).toBe(0);
+  await page.waitForTimeout(500);                                        // let the held scan render
+  console.log('AFTER RELEASE ', await state(page));
+});
+
+for (const [name, opts] of [['ctrl/cmd', { modifiers: ['ControlOrMeta'] }], ['shift', { modifiers: ['Shift'] }],
+  ['middle', { button: 'middle' }]] as const) {
+  test('new tab: ' + name, async ({ page, context }) => {
+    await page.goto('./');
+    const tab = context.waitForEvent('page', { timeout: 2000 }).then(() => true, () => false);
+    await page.getByRole('link', { name: 'JetBrains/koog' }).click(opts); // adapt: the new link
+    console.log('NEW TAB', name, 'opened:', await tab, 'this page:', await state(page));
+  });
+}
+EOF
+npx playwright test -c /tmp/rv/pw.config.ts 2>&1 | grep -E 'RELEASE|NEW TAB|passed|failed|Error'
+```
+  - Race: the 2nd scan must start through a *different* entry point than the 1st (submit, Enter, a
+    link, `?repo=` on load). `AFTER RELEASE` must have field, `repo` and `h2` naming the same
+    repository; `BEFORE RELEASE` must still show `Scanning…` (the 1st scan is still running).
+    Don't replace the hold with a fixed delay: a scan is ~4 sequential requests, so "delay each
+    answer 800 ms, wait 2.5 s" ends before the slow scan does and reports a false "no race".
+  - New tab: report which of ctrl/cmd, shift and middle-click open one. Middle-click fires no
+    `click`, so it usually works even when the others are broken; it doesn't clear the finding.
+  - A change to the layout: also take a screenshot (`page.screenshot({ path, fullPage: true })`)
+    into `$AIR_ARTIFACTS_DIR` when set, and look at it.
+  - Delete or ignore `/tmp/rv`; never add the probe to the repository.
 - A confirmed bug the tests missed: say which test would have caught it (one line), so the fix
   comes with its test.
 - Drop anything you can't back with a concrete failure scenario. Mark the rest
@@ -144,6 +201,9 @@ Before reporting, try to disprove each candidate:
 Severity: **important** — a user can hit it, or it breaks the spec, a claim of the PR or the
 definition of done. **nit** — real but minor (a weak test, an inconsistency with no visible effect).
 Don't inflate: a test that checks one of six items where the spec says "each" is a nit, not important.
+
+Symptoms of one root cause are one finding (e.g. a stale result winning *and* the button going idle
+too early both come from an unguarded `scan()`): list the symptoms in it, fix once.
 
 Prefer a few real findings over many speculative ones. Zero findings is a valid result.
 
