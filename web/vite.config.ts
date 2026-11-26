@@ -1,0 +1,10 @@
+// The web view: React, drawably's hand-drawn controls and @sketchyicons/react's icons.
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  root: import.meta.dirname,
+  base: './',
+  plugins: [react()],
+  build: { outDir: 'dist', emptyOutDir: true },
+});
