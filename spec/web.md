@@ -27,7 +27,9 @@ controls and [@sketchyicons/react](https://www.npmjs.com/package/@sketchyicons/r
 - The token's messages name the field, not the CLI's `GITHUB_TOKEN`: a token GitHub rejects →
   `GitHub rejected the token in the GitHub token field`; past the rate limit without a token →
   `GitHub rate limit reached; fill in the GitHub token field`; a tree too large to list, with a
-  token or without → the warning ends `(the CLI with GITHUB_TOKEN searches everywhere)`
+  token or without → the warning ends `(the CLI with GITHUB_TOKEN searches everywhere)`; at
+  `/tree/<ref>` it ends `(code search sees only the default branch)`, as the CLI's does: no
+  search reaches another ref, the CLI's neither
 - No `SKILL.md` → `0 skills`, nothing to choose
 - Examples, under the field: `anthropics/skills`, `obra/superpowers`, `vercel-labs/agent-skills`,
   `openai/codex`, `huggingface/skills`, `trailofbits/skills`, `getsentry/skills`,
