@@ -56,8 +56,9 @@ Each rule below closes a hole that was open, or a loop that ran, before.
    `gh pr merge --merge --match-head-commit <sha>`, which GitHub refuses if anything was pushed
    since. A run that made commits never merges.
 8. **A pull request does not write the rules of its own review.** The automations read their
-   skill from `origin/main`, not from the PR's working tree. A PR that changes a skill is reviewed
-   by the skill as it was.
+   skill from `origin/main`, never from the PR's working tree, and do nothing when `main` has
+   none. A PR that changes a skill is reviewed by the skill as it was. So the PR that first adds
+   a skill, or changes the marker line, is not handled by the new rules: **a person merges it.**
 9. **Nobody builds on an unmerged branch.** A PR stacked on another carries that one's commits
    into `main` under its own review.
 
