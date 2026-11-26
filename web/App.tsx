@@ -8,7 +8,7 @@ import {
   DrawablyHighlight,
   DrawablyInput,
 } from 'drawably/react';
-import { useEffect, useState, type FormEvent, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from 'react';
 import type { ScanView, SkillView } from '../src/browser.ts';
 
 export type Backend = { scan(input: string): Promise<ScanView> };
@@ -35,11 +35,15 @@ export function App({ backend }: { backend: Backend }) {
   const [scanning, setScanning] = useState(false);
   const [view, setView] = useState<ScanView>();
   const [selected, setSelected] = useState<string>();
+  // Only the latest scan shows: an earlier one that answers later is dropped.
+  const latest = useRef(0);
 
   async function scan(url: string) {
     if (!url.trim()) return;
+    const id = ++latest.current;
     setScanning(true);
     const result = await backend.scan(url);
+    if (id !== latest.current) return;
     setView(result);
     setSelected('skills' in result ? result.skills[0]?.id : undefined);
     setScanning(false);
@@ -63,6 +67,8 @@ export function App({ backend }: { backend: Backend }) {
   }
 
   function pick(event: MouseEvent, url: string) {
+    // Ctrl/Cmd-, Shift-, Alt-click: the browser's own (a new tab, a window, a download).
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
     setInput(url);
     scanAndShare(url);
