@@ -22,9 +22,15 @@ Rules that hold in every step:
   (`demo/<branch>`), which `pr-demo` pushes itself.
 - **Never** make a finding go away by weakening it: deleting or skipping a test, loosening an
   assertion, removing a case from `spec/`, adding a lint/type suppression.
-- **Not this run's to change:** `.github/workflows/`, `.claude/`, `AGENTS.md`, dependencies
-  (`package.json`, `package-lock.json`). A finding that needs one of them is declined with
-  "needs a person" (step 4).
+- **Not this run's to change:** `.github/workflows/`, dependencies (`package.json`,
+  `package-lock.json`). A finding that needs one of them is declined with "needs a person"
+  (step 4).
+- **Agent tooling is fixed like code, when the pull request already changes it:** a finding in
+  `.claude/` or `AGENTS.md` is fixed only in a PR whose own diff touches `.claude/` or `AGENTS.md`
+  (`git diff --name-only origin/<baseRefName>...HEAD`); in any other PR it is declined with "needs
+  a person". This run still follows the skills as they are on `main`, never the ones it edits. A
+  fix to a `.claude/automations/*.prompt.md` file changes only the reviewed copy: say in the
+  comment that a person has to copy it into Air.
 - Exactly **one** comment per handled review, kept up to date in place (step 2). No reviews, no
   approvals, no inline replies. The PR's description is edited only in its `## Demo` section.
 
@@ -133,9 +139,10 @@ refused → `blocked`, with GitHub's message. Merged → `state=merged`, with th
 
 ## 4. `verdict=not-ready` → one fix round
 
-**Round limit.** Count the `state=fixed` comments on the PR (the list from step 2, all heads).
-Three already → `state=blocked`: "three fix rounds have not brought this PR to ready; it needs a
-person", with what is still open. No fourth round.
+**No round limit.** Every `not-ready` review of the current head gets a fix round, however many
+came before: the loop runs until a review says `ready`, or a round has nothing it can fix. The
+round's number is the count of `state=fixed` and `state=declined` comments on the PR (the list
+from step 2, all heads) plus one; it is only shown in the comment.
 
 **Read first:** `AGENTS.md` (the definition of done), `spec/` (the source of truth), the review in
 full (`gh api "repos/{owner}/{repo}/pulls/<n>/reviews/<id>" --jq .body`), its inline comments
@@ -208,7 +215,7 @@ The final comment, replacing the claim (same comment id):
 
 ```markdown
 <!-- air-review-fix head=<the marker's head> state=<fixed|declined|merged|blocked> -->
-### Review fix: round <k> of 3 — [review of `<short sha>`](<review html_url>)
+### Review fix: round <k> — [review of `<short sha>`](<review html_url>)
 
 | # | Finding | Result |
 |---|---|---|
