@@ -7,7 +7,7 @@ export type Fetch = (url: string, init?: { headers?: Record<string, string> }) =
 
 export type GitHubOptions = {
   fetch: Fetch;
-  /** With a token, skills are found through code search; without it, through the tree. */
+  /** With a token, skills are found through code search where it reaches; without it, through the tree. */
   token?: string;
 };
 
@@ -41,8 +41,11 @@ export async function openGitHub(input: string, options: GitHubOptions): Promise
 
 type RepositoryInfo = { full_name: string; default_branch: string };
 
-/** Resolves the ref, or else the default branch, to a commit and lists the files that may be skills. */
-async function openRepository(github: Client, info: RepositoryInfo, ref: string | undefined, options: GitHubOptions): Promise<Source> {
+/**
+ * Resolves the ref, or else the default branch, to a commit and lists the files that may be skills.
+ * `covered`: whether code search knows the repository; it does not when archived or long inactive.
+ */
+async function openRepository(github: Client, info: RepositoryInfo, ref: string | undefined, options: GitHubOptions, covered = true): Promise<Source> {
   const id = info.full_name;
   const { sha } = await github.json<{ sha: string }>(
     `${API}/repos/${id}/commits/${encodePath(ref ?? info.default_branch)}`,
@@ -50,8 +53,12 @@ async function openRepository(github: Client, info: RepositoryInfo, ref: string 
   );
   const warnings: string[] = [];
   // Code search sees only the default branch: another ref is listed through its tree.
-  const search = Boolean(options.token) && !ref;
-  const hint = ref ? 'code search sees only the default branch' : 'GITHUB_TOKEN searches everywhere';
+  const search = Boolean(options.token) && !ref && covered;
+  const hint = ref
+    ? 'code search sees only the default branch'
+    : options.token
+      ? 'code search does not cover this repository'
+      : 'GITHUB_TOKEN searches everywhere';
   const paths = search ? await searchPaths(github, id) : await treePaths(github, id, sha, warnings, hint);
   return source(github, id, sha, paths, warnings);
 }
@@ -70,8 +77,9 @@ function source(github: Client, id: string, sha: string, paths: string[], warnin
 const AT_ONCE = 8;
 
 /**
- * Every repository of an organization, or of a user, at its default branch. With a token, one
- * code search over all of them; without, each repository's tree. Forks are not scanned.
+ * Every repository of an organization, or of a user, at its default branch: the repository list,
+ * then each one's tree. With a token, one code search over all of them first, and the tree only
+ * of those it does not answer for. Forks are not scanned.
  */
 async function openOrganization(github: Client, owner: string, options: GitHubOptions): Promise<OrganizationSource> {
   const { login } = await github.json<{ login: string }>(
@@ -79,7 +87,12 @@ async function openOrganization(github: Client, owner: string, options: GitHubOp
     `Organization not found: https://github.com/${owner}`,
   );
   const warnings: string[] = [];
-  const repositories = options.token ? await searchOrganization(github, login, warnings) : await listOrganization(github, login, options);
+  const listed = await listOrganization(github, login);
+  const searched = options.token ? await searchOrganization(github, login, warnings) : [];
+  // Code search leaves out archived and long inactive repositories: their trees are read, as without a token.
+  const known = new Set(searched.map((found) => found.repository.id));
+  const rest = listed.filter((repository) => !repository.fork && !known.has(repository.full_name));
+  const repositories = [...searched, ...(await openListed(github, rest, options))];
   return { organization: { id: login, url: `https://github.com/${login}` }, repositories, warnings };
 }
 
@@ -97,18 +110,23 @@ async function searchOrganization(github: Client, login: string, warnings: strin
   });
 }
 
-/** Every repository the owner has, 100 a page, each listed through its tree; empty ones are left out. */
-async function listOrganization(github: Client, login: string, options: GitHubOptions): Promise<Source[]> {
-  const repositories: RepositoryInfo[] = [];
+type ListedRepository = RepositoryInfo & { fork: boolean };
+
+/** Every repository the owner has, forks included, 100 a page. */
+async function listOrganization(github: Client, login: string): Promise<ListedRepository[]> {
+  const repositories: ListedRepository[] = [];
   for (let page = 1; ; page++) {
-    const answer = await github.json<(RepositoryInfo & { fork: boolean })[]>(
-      `${API}/users/${login}/repos?per_page=100&page=${page}`,
-    );
-    repositories.push(...answer.filter((repository) => !repository.fork));
+    const answer = await github.json<ListedRepository[]>(`${API}/users/${login}/repos?per_page=100&page=${page}`);
+    repositories.push(...answer);
     if (answer.length < 100) break;
   }
+  return repositories;
+}
+
+/** Each repository listed through its tree; empty ones are left out. */
+async function openListed(github: Client, repositories: RepositoryInfo[], options: GitHubOptions): Promise<Source[]> {
   const sources = await pooled(repositories, AT_ONCE, (info) =>
-    openRepository(github, info, undefined, options).catch((error: unknown) => {
+    openRepository(github, info, undefined, options, false).catch((error: unknown) => {
       if (error instanceof EmptyRepository) return undefined;
       throw error;
     }),

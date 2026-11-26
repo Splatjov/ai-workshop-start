@@ -332,13 +332,15 @@ test('organization: its skills under their repositories, the first one chosen; t
   await expect(chosen(page).getByLabel('SKILL.md')).toHaveText(GRADLE_MD);
 });
 
-test('organization, with a token: one code search; unknown → the CLI’s message, as an alert', async ({ page }) => {
+test('organization, with a token: one code search and the repository list; unknown → the CLI’s message, as an alert', async ({ page }) => {
   await page.goto('./');
   await page.getByLabel('GitHub token').fill('secret-token');
   await scan(page, 'github.com/atlas-org');
   await expect(page.getByRole('heading', { level: 2 })).toHaveText('atlas-org 4 skills in 2 repositories');
   expect(requests).toContain('https://api.github.com/search/code?q=filename:SKILL.md+user:atlas-org&per_page=100&page=1');
-  expect(requests.some((url) => url.includes('/users/atlas-org/repos'))).toBe(false);
+  // The repositories the search does not answer for are read through their trees.
+  expect(requests).toContain('https://api.github.com/users/atlas-org/repos?per_page=100&page=1');
+  expect(requests).toContain(`https://api.github.com/repos/atlas-org/beta/git/trees/${COMMIT}?recursive=1`);
   expect(authorizations.every((header) => header === 'Bearer secret-token')).toBe(true);
 
   await scan(page, 'https://github.com/no-such-org');

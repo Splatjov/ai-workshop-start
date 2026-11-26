@@ -62,7 +62,7 @@ test('organization, without a token: the repository list, then each tree; only r
   assert.ok(urls.includes('https://api.github.com/repos/atlas-org/empty/commits/main'));
 });
 
-test('organization, with a token: one code search over all its repositories, the same result', async () => {
+test('organization, with a token: one code search, then the tree of each repository it does not answer for; the same result', async () => {
   const { fetch, requests } = github();
   const result = await atlas(['scan', 'github.com/atlas-org/'], { fetch, token: 'secret' });
   assert.equal(result.code, 0, result.stderr);
@@ -73,12 +73,47 @@ test('organization, with a token: one code search over all its repositories, the
     api.map((request) => request.url).sort(),
     [
       'https://api.github.com/repos/atlas-org/alpha/commits/HEAD',
+      // beta and empty are not in the search's answer: their trees are read; the fork is not.
+      'https://api.github.com/repos/atlas-org/beta/commits/main',
+      `https://api.github.com/repos/atlas-org/beta/git/trees/${COMMIT}?recursive=1`,
+      'https://api.github.com/repos/atlas-org/empty/commits/main',
       'https://api.github.com/repos/atlas-org/gamma/commits/HEAD',
       'https://api.github.com/search/code?q=filename:SKILL.md+user:atlas-org&per_page=100&page=1',
       'https://api.github.com/users/atlas-org',
+      'https://api.github.com/users/atlas-org/repos?per_page=100&page=1',
     ],
   );
   assert.ok(api.every((request) => request.authorization === 'Bearer secret'));
+});
+
+test('organization: an archived repository, which code search leaves out, is scanned with a token as without', async () => {
+  const ok = (body: unknown) => ({ status: 200, body });
+  const listed = RECORDING['https://api.github.com/users/atlas-org/repos?per_page=100&page=1'].body as object[];
+  const recording: Recording = {
+    ...RECORDING,
+    'https://api.github.com/users/atlas-org/repos?per_page=100&page=1': ok([
+      ...listed,
+      { full_name: 'atlas-org/archived', default_branch: 'main', fork: false, archived: true },
+    ]),
+    // Code search, as recorded, does not answer for the archived repository.
+    'https://api.github.com/repos/atlas-org/archived/commits/main': ok({ sha: COMMIT }),
+    [`https://api.github.com/repos/atlas-org/archived/git/trees/${COMMIT}?recursive=1`]: ok({
+      truncated: false,
+      tree: [{ path: 'skills/old/SKILL.md', mode: '100644', type: 'blob', sha: 'a' }],
+    }),
+    [`https://raw.githubusercontent.com/atlas-org/archived/${COMMIT}/skills/old/SKILL.md`]: ok('---\nname: old\ndescription: Kept for the record.\n---\n'),
+  };
+  const expected = ORGANIZATION.replace('atlas-org · 4 skills in 2 repositories', 'atlas-org · 5 skills in 3 repositories').replace(
+    '\natlas-org/gamma · 2 skills',
+    ['', 'atlas-org/archived · 1 skill', 'old — Kept for the record.', `  https://github.com/atlas-org/archived/blob/${COMMIT}/skills/old/SKILL.md`, '', 'atlas-org/gamma · 2 skills'].join('\n'),
+  );
+  const withToken = github(recording);
+  const withoutToken = github(recording);
+  const scanned = await atlas(['scan', 'https://github.com/atlas-org'], { fetch: withToken.fetch, token: 'secret' });
+  assert.equal(scanned.code, 0, scanned.stderr);
+  assert.equal(scanned.stdout, expected);
+  assert.deepEqual(scanned, await atlas(['scan', 'https://github.com/atlas-org'], { fetch: withoutToken.fetch }));
+  assert.ok(withToken.requests.some((request) => request.url.includes('/search/code?')));
 });
 
 test('organization: the repository list is read page by page', async () => {
@@ -109,6 +144,7 @@ test('organization: the repository list is read page by page', async () => {
 test('organization, with a token: more than 1000 files → the first 1000 and a warning', async () => {
   const recording: Recording = {
     'https://api.github.com/users/big': { status: 200, body: { login: 'big' } },
+    'https://api.github.com/users/big/repos?per_page=100&page=1': { status: 200, body: [{ full_name: 'big/skills', default_branch: 'main', fork: false }] },
     'https://api.github.com/repos/big/skills/commits/HEAD': { status: 200, body: { sha: COMMIT } },
   };
   for (let page = 1; page <= 10; page++) {

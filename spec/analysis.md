@@ -14,9 +14,12 @@ its name, description or path, in any case. No words → every skill. The scan i
 what is shown differs
 ## Organization
 - The same scan, for each repository; the result lists the repositories *that have skills*, by id
-- With `GITHUB_TOKEN`: one code search over all of them, at most 1000 files; more → a *warning*
-- Without: the repository list, then each one's tree, 8 at a time: two requests a repository, so
-  GitHub's limit of 60 an hour is reached past some 25 repositories → the rate limit message
+- With and without `GITHUB_TOKEN`, the *same result*: the repository list says which there are
+- Without: each one's tree, 8 at a time: two requests a repository, so GitHub's limit of 60 an
+  hour is reached past some 25 repositories → the rate limit message
+- With: one code search over all of them, at most 1000 files; more → a *warning*. Code search
+  leaves out archived and long inactive repositories: each repository it does not answer for is
+  read through its tree, as without a token
 - Forks and empty repositories are not scanned
 - A warning names its repository: `<owner>/<repo>: <warning>`
 - Unknown organization → a clear message, exit code 1
@@ -39,7 +42,8 @@ Skill: id = `repo:path`, name, description, commit. Organization → repository 
 - Symbolic links are not followed, locally and on GitHub
 - A local directory skips `.git` and `node_modules`
 - No `SKILL.md` → `0 skills`, exit code 0
-- Without `GITHUB_TOKEN`, a tree too large for one answer → only the skill roots, and a *warning*
+- Without `GITHUB_TOKEN`, a tree too large for one answer → only the skill roots, and a *warning*;
+  with it too, for an organization's repository that code search does not answer for
 - Listed, but gone at the scanned commit → skipped, with a *warning*
 ## End-to-end tests
 Real repositories, each pinned to a commit: `npm run test:e2e`, in CI too
