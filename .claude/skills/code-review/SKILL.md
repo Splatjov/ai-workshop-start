@@ -18,7 +18,7 @@ From `$ARGUMENTS` (or, in an automation, from the triggering PR event):
   equals `headRefOid`, stay where you are; otherwise `gh pr checkout <n>` (or, already on its
   branch, `git fetch origin <head> && git merge --ff-only origin/<head>`). The triggering event's
   sha is often stale: the author, or another run of this automation, pushed while this one started.
-  Review `headRefOid`, and name its short sha in the report
+  Review `headRefOid`, and name its short sha in the report.
 - a branch name → `git diff origin/main...<branch>`
 - nothing → if the current branch has an open PR (`gh pr view --json number`), review that PR;
   otherwise `git diff origin/main...HEAD` plus uncommitted changes (`git diff HEAD`)
@@ -75,9 +75,9 @@ Any failing command is a finding: quote the relevant output.
 For a PR, also check CI: `gh pr checks <n>` (exit code 8 just means "some pending"). A push to a PR
 branch usually starts two runs (`push` and `pull_request`); both count. Judge only the runs of the
 reviewed head (`gh run list --branch <head> --commit <sha>`): `cancelled` runs of older commits
-were superseded by the workflow's `concurrency: cancel-in-progress`, they are not failures. On a fresh push they are
-often still pending — check again at the end of the review. Still pending is a note in the
-report, with the run links.
+were superseded by the workflow's `concurrency: cancel-in-progress`, they are not failures. On a
+fresh push they are often still pending — check again at the end of the review. Still pending is
+a note in the report, with the run links.
 
 Red: read why before judging (`gh run view <run-id> --log-failed | tail -40`).
 - The code fails (typecheck, a test, the smoke test) → a finding, quote the failing lines.
@@ -245,7 +245,7 @@ Prefer a few real findings over many speculative ones. Zero findings is a valid 
 Print a markdown report:
 
 ```markdown
-## Code review: <PR #n title | branch>
+## Code review: <PR #n title | branch> @ <short sha>
 <one sentence: what the change does>
 
 **Verdict:** ✅ ready | ⚠️ ready after fixes | ❌ not ready
@@ -298,6 +298,12 @@ With `--comment` and a PR target:
   - Otherwise a new report, naming the earlier findings that are now fixed.
 - Changing this skill in the same run (when asked to): fetch the branch and fast-forward first,
   since another run may have pushed its own edits; add to them, don't redo them.
+  Every push of such an edit fires `synchronize` and starts the next run of this automation, so
+  edit only for a case this run actually hit and the skill got wrong or left out, not to reword it.
+  No such case → no commit, and the loop ends.
+  When the new commits since the last report are this automation's own skill edits (signed
+  `Name: Code Review`) and the run has nothing new to report, don't add another comment: PATCH the
+  latest follow-up in place with the new sha and its CI.
 
 When `$AIR_ARTIFACTS_DIR` is set (an automation), always write the report to
 `$AIR_ARTIFACTS_DIR/code-review.md` too, so it survives the run.
