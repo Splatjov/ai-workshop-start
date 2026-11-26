@@ -1,8 +1,7 @@
 # Web view
 `npm run web`: a page with a field for a **GitHub repository link**, its skills, and the
 `SKILL.md` of the chosen one. Hand-drawn: [drawably](https://www.npmjs.com/package/drawably)
-controls and [@sketchyicons/react-native](https://www.npmjs.com/package/@sketchyicons/react-native)
-icons, through `react-native-web`. `npm run web:build`: a static site in `web/dist`.
+controls and [@sketchyicons/react](https://www.npmjs.com/package/@sketchyicons/react) icons. `npm run web:build`: a static site in `web/dist`.
 ## Behaviour
 - The same scan as the CLI (`createBrowserBackend().scan`), from the browser, over live GitHub,
   *without a token*; the same URLs, `/tree/<ref>` included

@@ -1,5 +1,5 @@
 // The web view: a field for a repository link, its skills, and the SKILL.md of the chosen one.
-import { AlertTriangle, ExternalLink, FileText, FolderGit2, Search, Sparkles } from '@sketchyicons/react-native';
+import { AlertTriangle, ExternalLink, FileText, FolderGit2, Search, Sparkles } from '@sketchyicons/react';
 import {
   DrawablyAlert,
   DrawablyBadge,
