@@ -2,7 +2,7 @@
 // web view, over live GitHub, with the token the page was given, if any. No Node APIs here.
 import { run } from './commands.ts';
 import { AtlasError } from './core/errors.ts';
-import { openGitHub, type Fetch } from './core/github.ts';
+import { openGitHub, type Fetch, type TokenSource } from './core/github.ts';
 import { skillLink, type Organization, type Repository, type Skill } from './core/model.ts';
 import { pooled, scan, type Source } from './core/scan.ts';
 
@@ -28,9 +28,13 @@ export type ScanOptions = {
   token?: string;
 };
 
+/** The page has no environment: its messages name the field the token is typed into. */
+const TOKEN_FIELD: TokenSource = { name: 'the GitHub token field', set: 'fill in the GitHub token field' };
+
 export function createBrowserBackend(options: BrowserOptions = {}) {
   const live = options.fetch ?? ((url, init) => fetch(url, init));
-  const open = (input: string, token?: string) => openGitHub(input, { fetch: live, token: token?.trim() || undefined });
+  const open = (input: string, token?: string) =>
+    openGitHub(input, { fetch: live, token: token?.trim() || undefined, tokenSource: TOKEN_FIELD });
 
   /** The scan, with each skill's link and the SKILL.md text the scan read. */
   async function view(opened: Source): Promise<RepositoryView> {

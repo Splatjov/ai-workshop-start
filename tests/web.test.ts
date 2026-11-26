@@ -121,6 +121,21 @@ test('scan: with a token, it goes to GitHub with every API request, and code sea
   assert.ok(!sent.some(({ url }) => url.includes('/search/')));
 });
 
+test('scan: the token messages name the GitHub token field, not GITHUB_TOKEN', async () => {
+  const answering = (status: number, message: string) =>
+    createBrowserBackend({ fetch: async () => new Response(JSON.stringify({ message }), { status }) });
+  assert.deepEqual(await answering(401, 'Bad credentials').scan('https://github.com/JetBrains/koog', { token: 'wrong' }), {
+    error: 'GitHub rejected the token in the GitHub token field',
+  });
+  assert.deepEqual(await answering(403, 'API rate limit exceeded for 192.0.2.1.').scan('https://github.com/JetBrains/koog'), {
+    error: 'GitHub rate limit reached; fill in the GitHub token field',
+  });
+  // With a token, past the limit: nothing to fill in.
+  assert.deepEqual(await answering(403, 'API rate limit exceeded for user ID 1.').scan('https://github.com/JetBrains/koog', { token: 'good' }), {
+    error: 'GitHub rate limit reached; try again in a minute',
+  });
+});
+
 test('scan: an organization → its repositories with skills, by id, each SKILL.md as scanned, warnings named', async () => {
   for (const token of [undefined, 'secret']) {
     const view = await backend.scan('https://github.com/atlas-org', { token });

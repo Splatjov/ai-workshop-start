@@ -346,3 +346,23 @@ test('organization, with a token: one code search and the repository list; unkno
   await scan(page, 'https://github.com/no-such-org');
   await expect(page.getByRole('alert')).toHaveText('error Organization not found: https://github.com/no-such-org');
 });
+
+test('a token GitHub rejects, the rate limit without one → alerts that name the GitHub token field', async ({ page, context }) => {
+  // GitHub answers 401 to a request with a token, and is past its rate limit without one.
+  await context.route('https://api.github.com/repos/JetBrains/koog', (route) => {
+    const rejected = Boolean(route.request().headers().authorization);
+    return route.fulfill({
+      status: rejected ? 401 : 403,
+      body: JSON.stringify({ message: rejected ? 'Bad credentials' : 'API rate limit exceeded for 192.0.2.1.' }),
+      headers: { 'access-control-allow-origin': '*' },
+    });
+  });
+  await page.goto('./');
+  await scan(page, 'https://github.com/JetBrains/koog');
+  await expect(page.getByRole('alert')).toHaveText('error GitHub rate limit reached; fill in the GitHub token field');
+
+  await page.getByLabel('GitHub token').fill('wrong-token');
+  await scan(page, 'https://github.com/JetBrains/koog');
+  await expect(page.getByRole('alert')).toHaveText('error GitHub rejected the token in the GitHub token field');
+  await expect(page.getByRole('alert')).not.toContainText('GITHUB_TOKEN');
+});

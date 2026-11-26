@@ -22,6 +22,9 @@ controls and [@sketchyicons/react](https://www.npmjs.com/package/@sketchyicons/r
   `also in <paths>` for copies, and its `SKILL.md` *as scanned*, front matter included, as text
 - Warnings: under the repository, as notes
 - An unreachable repository, an unknown ref, a non-GitHub link → the CLI's message, as an alert
+- The token's messages name the field, not the CLI's `GITHUB_TOKEN`: a token GitHub rejects →
+  `GitHub rejected the token in the GitHub token field`; past the rate limit without a token →
+  `GitHub rate limit reached; fill in the GitHub token field`
 - No `SKILL.md` → `0 skills`, nothing to choose
 - Examples, under the field: `anthropics/skills`, `obra/superpowers`, `vercel-labs/agent-skills`,
   `openai/codex`, `huggingface/skills`, `trailofbits/skills`, `getsentry/skills`,

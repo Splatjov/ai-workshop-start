@@ -9,7 +9,14 @@ export type GitHubOptions = {
   fetch: Fetch;
   /** With a token, skills are found through code search where it reaches; without it, through the tree. */
   token?: string;
+  /** Where the user gives the token, as the messages name it; the CLI's `GITHUB_TOKEN` by default. */
+  tokenSource?: TokenSource;
 };
+
+/** `name`: "GitHub rejected the token in <name>"; `set`: "GitHub rate limit reached; <set>". */
+export type TokenSource = { name: string; set: string };
+
+const ENVIRONMENT: TokenSource = { name: 'GITHUB_TOKEN', set: 'set GITHUB_TOKEN' };
 
 const API = 'https://api.github.com';
 const RAW = 'https://raw.githubusercontent.com';
@@ -194,7 +201,7 @@ function files(tree: Tree): string[] {
 
 type Client = ReturnType<typeof client>;
 
-function client({ fetch, token }: GitHubOptions) {
+function client({ fetch, token, tokenSource = ENVIRONMENT }: GitHubOptions) {
   const headers: Record<string, string> = { Accept: 'application/vnd.github+json' };
   if (token) headers.Authorization = `Bearer ${token}`;
   const answers = new Map<string, Promise<unknown>>(); // the root tree is asked for once per skill root
@@ -216,9 +223,9 @@ function client({ fetch, token }: GitHubOptions) {
     if (response.status === 404) throw new AtlasError(notFound);
     if (response.status === 409 && /empty/i.test(text)) throw new EmptyRepository(`Repository is empty: ${url}`);
     if ((response.status === 403 || response.status === 429) && /rate limit/i.test(text)) {
-      throw new AtlasError(`GitHub rate limit reached; ${token ? 'try again in a minute' : 'set GITHUB_TOKEN'}`);
+      throw new AtlasError(`GitHub rate limit reached; ${token ? 'try again in a minute' : tokenSource.set}`);
     }
-    if (response.status === 401) throw new AtlasError('GitHub rejected the token in GITHUB_TOKEN');
+    if (response.status === 401) throw new AtlasError(`GitHub rejected the token in ${tokenSource.name}`);
     throw new AtlasError(`GitHub answered ${response.status} for ${url}${text && `: ${text}`}`);
   }
 
