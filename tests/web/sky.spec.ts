@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { EXAMPLES } from '../../web/examples.ts';
 import { chosen, recorded, scan, skillButtons } from './github.ts';
 import { ink, withoutWebGL } from './in-page.js';
-import { KOOG_MD, RECORDING } from './recording.ts';
+import { KOOG_MD, MANY_LONG_NAME, RECORDING } from './recording.ts';
 
 let errors: string[];
 
@@ -16,11 +16,43 @@ test.afterEach(() => expect(errors, 'errors in the page').toEqual([]));
 const sky = (page: Page) => page.locator('canvas.sky');
 const star = (page: Page, name: string) => page.locator('[data-star]').filter({ hasText: new RegExp(`^${name}$`) });
 
-/** The middle of a star, on the page: its name's element is a point there. */
+/**
+ * The middle of a star, on the page, once the globe has come to rest: its name's element is a
+ * point there, placed by the engine a frame or more after the page wrote it.
+ */
 async function where(page: Page, name: string): Promise<{ x: number; y: number }> {
-  const box = await star(page, name).boundingBox();
-  expect(box, `the star ${name}`).not.toBeNull();
-  return { x: box!.x, y: box!.y };
+  const point = star(page, name);
+  await expect(point).toHaveAttribute('style', /translate3d/);
+  let last = await point.boundingBox();
+  await expect
+    .poll(
+      async () => {
+        const next = await point.boundingBox();
+        const rested = next !== null && last !== null && next.x === last.x && next.y === last.y;
+        last = next;
+        return rested;
+      },
+      { intervals: [150] },
+    )
+    .toBe(true);
+  return { x: last!.x, y: last!.y };
+}
+
+/** The ink on a sky that has stopped changing: for a still sky, to compare what is drawn. */
+async function rested(page: Page) {
+  let last = await page.evaluate(ink);
+  await expect
+    .poll(
+      async () => {
+        const next = await page.evaluate(ink);
+        const same = next.weight === last.weight;
+        last = next;
+        return same;
+      },
+      { intervals: [200] },
+    )
+    .toBe(true);
+  return last;
 }
 
 test('the globe is drawn before anything is scanned, in the pen alone, and boils', async ({ page }) => {
@@ -32,7 +64,19 @@ test('the globe is drawn before anything is scanned, in the pen alone, and boils
   await expect(page.locator('[data-star]')).toHaveCount(0);
 
   const { weight } = await page.evaluate(ink);
-  await expect.poll(async () => (await page.evaluate(ink)).weight).not.toBe(weight); // it drifts, and its lines boil
+  await expect.poll(async () => (await page.evaluate(ink)).weight).not.toBe(weight); // it drifts
+
+  // Its lines boil through three frames, as drawably's do.
+  const frames = new Set<string | null>();
+  await expect
+    .poll(
+      async () => {
+        frames.add(await sky(page).getAttribute('data-frame'));
+        return [...frames].sort().join(' ');
+      },
+      { intervals: [90] },
+    )
+    .toBe('0 1 2');
 });
 
 test('every skill is a star, named, in the constellation of its directory', async ({ page }) => {
@@ -43,6 +87,47 @@ test('every skill is a star, named, in the constellation of its directory', asyn
   await expect(star(page, 'code-style')).toHaveAttribute('data-chosen', '');
   await expect(star(page, 'commits')).not.toHaveAttribute('data-chosen', '');
   await expect.poll(async () => (await page.evaluate(ink)).accented).toBeGreaterThan(60); // the chosen star, circled in red
+});
+
+test('the chosen star turns to the front, with its name beside it', async ({ page }) => {
+  await page.goto('./');
+  await scan(page, 'https://github.com/JetBrains/atlas-demo');
+  await where(page, 'code-style'); // the result is on the page, and the globe in its place on it
+  const slot = (await page.locator('.globe').boundingBox())!;
+  const middle = { x: slot.x + slot.width / 2, y: slot.y + slot.height / 2 };
+
+  for (const name of ['code-style', 'release']) {
+    if (name !== 'code-style') await skillButtons(page).filter({ hasText: name }).click();
+    await expect(star(page, name)).toHaveAttribute('data-chosen', '');
+    const at = await where(page, name);
+    expect(Math.hypot(at.x - middle.x, at.y - middle.y), `${name}, from the middle of the globe`).toBeLessThan(Math.min(slot.width, slot.height) * 0.18);
+
+    // Its name is shown, level with the star and next to it, not over it.
+    await expect(star(page, name)).toHaveCSS('opacity', '1');
+    const text = (await star(page, name).locator('i').boundingBox())!;
+    const beside = Math.max(text.x - at.x, at.x - (text.x + text.width));
+    expect(beside).toBeGreaterThan(4);
+    expect(beside).toBeLessThan(40);
+    expect(Math.abs(text.y + text.height / 2 - at.y)).toBeLessThan(6);
+  }
+});
+
+test('a name with no room beside its star is written above it, inside the globe’s place', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('./');
+  await scan(page, 'https://github.com/JetBrains/many');
+  await skillButtons(page).last().click();
+  const long = star(page, MANY_LONG_NAME);
+  await expect(long).toHaveAttribute('data-chosen', '');
+  const at = await where(page, MANY_LONG_NAME);
+
+  await expect(long).toHaveAttribute('data-side', 'above');
+  await expect(long).toHaveCSS('opacity', '1');
+  const slot = (await page.locator('.globe').boundingBox())!;
+  const text = (await long.locator('i').boundingBox())!;
+  expect(text.y + text.height).toBeLessThan(at.y);
+  expect(text.x).toBeGreaterThanOrEqual(slot.x);
+  expect(text.x + text.width).toBeLessThanOrEqual(slot.x + slot.width);
 });
 
 test('clicking a star chooses its skill', async ({ page }) => {
@@ -68,14 +153,25 @@ test('pointing at a skill marks its star, and pointing at a star marks its skill
   await page.goto('./');
   await scan(page, 'https://github.com/JetBrains/atlas-demo');
 
+  await where(page, 'release'); // the result is on the page, its stars in their places
+  const calm = await rested(page);
   await skillButtons(page).filter({ hasText: 'release' }).hover();
   await expect(page.locator('[data-star][data-pointed]')).toHaveText('release');
+  await expect.poll(async () => (await page.evaluate(ink)).inked).toBeGreaterThan(calm.inked + 60); // a ring of ink round it
 
   const commits = await where(page, 'commits');
   await page.mouse.move(commits.x, commits.y);
   await expect(page.locator('[data-star][data-pointed]')).toHaveText('commits');
   await expect(skillButtons(page).nth(1)).toHaveAttribute('data-pointed', '');
   await expect(skillButtons(page).nth(2)).not.toHaveAttribute('data-pointed', '');
+
+  // Clicked, the star keeps the red ring alone: the pointer's ring is gone from it.
+  const ringed = await rested(page);
+  await page.mouse.click(commits.x, commits.y);
+  await expect(star(page, 'commits')).toHaveAttribute('data-chosen', '');
+  const after = await rested(page);
+  expect(after.accented).toBeGreaterThan(60);
+  expect(after.inked).toBeLessThan(ringed.inked);
 });
 
 test('dragging turns the globe', async ({ page }) => {
@@ -184,10 +280,11 @@ test('prefers-reduced-motion: the sky is drawn, and still', async ({ page }) => 
   await expect(star(page, 'code-style')).toHaveAttribute('data-chosen', '');
   const first = await where(page, 'code-style');
   await expect.poll(async () => (await page.evaluate(ink)).accented).toBeGreaterThan(60);
-  const { weight } = await page.evaluate(ink);
+  const { weight } = await rested(page);
   await page.waitForTimeout(900); // two boils long
   expect(await where(page, 'code-style')).toEqual(first);
   expect((await page.evaluate(ink)).weight).toBe(weight);
+  await expect(sky(page)).toHaveAttribute('data-frame', '0');
 });
 
 test('no WebGL → the page works without the sky', async ({ page }) => {

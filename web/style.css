@@ -248,7 +248,12 @@ a {
   cursor: pointer;
 }
 
-/* The night spreads from the switch: the page's own animation draws the circle. */
+/* The night spreads from the switch: the page's own animation draws the circle. The page stays
+   under the hand while it does. */
+::view-transition {
+  pointer-events: none;
+}
+
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation: none;
@@ -757,11 +762,23 @@ h1 .spark {
   white-space: nowrap;
 }
 
+/* The warnings keep to their own corner, however many: the index below always has its room. */
+.warnings {
+  flex: none;
+  max-height: 30dvh;
+  margin-top: 10px;
+  padding-bottom: 6px;
+  overflow-y: auto;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent);
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--ink-rgb) / 0.3) transparent;
+}
+
 .warning {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  margin: 10px 0 0;
+  margin: 0 0 8px;
   font: italic 380 13.5px/1.4 var(--serif);
   color: var(--warn);
   overflow-wrap: anywhere;
@@ -1084,6 +1101,12 @@ h1 .drawably-wash {
     display: none;
   }
 
+  .warnings {
+    max-height: none;
+    overflow: visible;
+    mask-image: none;
+  }
+
   .plate[data-view='chart'] .globe {
     grid-column: 1 / -1;
   }
@@ -1198,8 +1221,7 @@ h1 .drawably-wash {
   *,
   *::before,
   *::after {
-    animation-duration: 1ms !important;
-    animation-delay: 0ms !important;
-    transition-duration: 1ms !important;
+    animation: none !important;
+    transition: none !important;
   }
 }

@@ -36,6 +36,22 @@ export function ink() {
   );
 }
 
+/**
+ * The names of the stars that are in plain view: on the near side of the globe, inside its place
+ * on the page, their names fully shown.
+ * @returns {string[]}
+ */
+export function starsInView() {
+  const slot = document.querySelector('.globe').getBoundingClientRect();
+  return [...document.querySelectorAll('[data-star]')]
+    .filter((star) => {
+      const at = star.getBoundingClientRect();
+      const inside = at.x > slot.left + 30 && at.x < slot.right - 30 && at.y > slot.top + 30 && at.y < slot.bottom - 30;
+      return inside && Number(getComputedStyle(star).opacity) > 0.9;
+    })
+    .map((star) => star.textContent);
+}
+
 /** A browser without WebGL: a canvas gives no such context. */
 export function withoutWebGL() {
   const getContext = HTMLCanvasElement.prototype.getContext;

@@ -1,7 +1,8 @@
 // spec/web.md: the page, as a user sees it, over recorded GitHub answers.
 import { expect, test } from '@playwright/test';
 import { chosen, recorded, scan, skillButtons } from './github.ts';
-import { BROKEN_MD, COMMIT, COMMITS_MD, STYLE_MD } from './recording.ts';
+import { starsInView } from './in-page.js';
+import { BROKEN_MD, COMMIT, COMMITS_MD, MANY_BIG_MD, MANY_ONE_LINE_MD, STYLE_MD } from './recording.ts';
 
 const blob = `https://github.com/JetBrains/atlas-demo/blob/${COMMIT}`;
 let requests: string[];
@@ -69,6 +70,71 @@ test('warnings: under the repository, as notes; the skill is still shown', async
   await expect(page.getByRole('note')).toHaveText([/^tools\/release\/SKILL\.md: malformed front matter: .*; using the directory name$/]);
   await skillButtons(page).filter({ hasText: 'release' }).click();
   await expect(chosen(page).getByLabel('SKILL.md')).toHaveText(BROKEN_MD);
+});
+
+test('the size of a SKILL.md: its lines and its bytes, in kB from a thousand', async ({ page }) => {
+  await page.goto('./');
+  await scan(page, 'https://github.com/JetBrains/many');
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/many 24 skills');
+
+  await skillButtons(page).nth(1).click();
+  const bytes = new TextEncoder().encode(MANY_BIG_MD).length;
+  expect(bytes).toBeGreaterThan(1000);
+  await expect(chosen(page)).toContainText(`${MANY_BIG_MD.split('\n').length - 1} lines · ${(bytes / 1000).toFixed(1)} kB`);
+  await expect(chosen(page).getByLabel('SKILL.md')).toHaveText(MANY_BIG_MD);
+
+  await skillButtons(page).nth(2).click();
+  await expect(chosen(page)).toContainText('1 line · 10 B');
+  await expect(chosen(page).getByLabel('SKILL.md')).toHaveText(MANY_ONE_LINE_MD);
+});
+
+test('many warnings: each one a note, and the index keeps its room', async ({ page }) => {
+  await page.goto('./');
+  await scan(page, 'https://github.com/JetBrains/many');
+  const notes = page.getByRole('note');
+  await expect(notes).toHaveCount(9);
+  await expect(notes.filter({ hasText: 'malformed front matter' })).toHaveCount(8);
+  await expect(notes.filter({ hasText: 'no front matter' })).toHaveText('.claude/skills/skill-03/SKILL.md: no front matter; using the directory name');
+
+  const index = (await page.getByRole('navigation', { name: 'Skills' }).boundingBox())!;
+  expect(index.height).toBeGreaterThan(200);
+  await expect(skillButtons(page).first()).toBeInViewport({ ratio: 1 });
+  await notes.last().scrollIntoViewIfNeeded(); // the notes scroll in their own corner
+  await expect(notes.last()).toBeInViewport({ ratio: 1 });
+  await expect(skillButtons(page).first()).toBeInViewport({ ratio: 1 });
+});
+
+test('a long index: the chosen skill stays in view, however it is chosen', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' }); // the globe turns at once, so its stars stand still
+  await page.goto('./');
+  await scan(page, 'https://github.com/JetBrains/many');
+  const buttons = skillButtons(page);
+  await expect(buttons).toHaveCount(24);
+  await expect(buttons.nth(17)).not.toBeInViewport();
+
+  // By a click, far down the index: it stays where it was clicked.
+  await buttons.nth(17).click();
+  await expect(buttons.nth(17)).toHaveAttribute('aria-current', 'true');
+  await expect(buttons.nth(17)).toBeInViewport({ ratio: 1 });
+
+  // By the keys, on and on: the index follows.
+  for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowDown');
+  await expect(buttons.nth(22)).toBeFocused();
+  await expect(buttons.nth(22)).toBeInViewport({ ratio: 1 });
+  for (let i = 0; i < 20; i++) await page.keyboard.press('ArrowUp');
+  await expect(buttons.nth(2)).toHaveAttribute('aria-current', 'true');
+  await expect(buttons.nth(2)).toBeInViewport({ ratio: 1 });
+
+  // By its star, on the globe: the index scrolls to a skill that was out of view.
+  await expect.poll(() => page.evaluate(starsInView)).toContain('skill-03');
+  const far = (await page.evaluate(starsInView)).filter((name) => name >= 'skill-12').at(-1);
+  expect(far, 'a star in view whose skill is far down the index').toBeDefined();
+  const entry = buttons.filter({ hasText: far });
+  await expect(entry).not.toBeInViewport();
+  const at = (await page.locator('[data-star]').filter({ hasText: far }).boundingBox())!;
+  await page.mouse.click(at.x, at.y);
+  await expect(entry).toHaveAttribute('aria-current', 'true');
+  await expect(entry).toBeInViewport({ ratio: 1 });
 });
 
 test('a /tree/<ref> URL scans that commit', async ({ page }) => {

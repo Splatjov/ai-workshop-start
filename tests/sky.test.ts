@@ -91,16 +91,41 @@ test('the scanned commit seeds the sky: the same commit, the same sky', () => {
   assert.notDeepEqual(other.stars.map((star) => star.at), again.stars.map((star) => star.at));
 });
 
-test('no two stars crowd each other, in a small repository or a large one', () => {
-  for (const count of [2, 6, 40, 150]) {
-    const skills = Array.from({ length: count }, (_, i) => skill(`${i % 3 === 0 ? 'docs' : '.claude/skills'}/s${i}/SKILL.md`));
-    const { stars } = chartOf(scanned(skills));
-    let closest = Infinity;
+test('no two stars crowd each other: one directory or many, a few skills or hundreds', () => {
+  const closest = (paths: string[]) => {
+    const { stars } = chartOf(scanned(paths.map((path) => skill(path))));
+    let least = Infinity;
     for (let i = 0; i < stars.length; i++) {
-      for (let j = i + 1; j < stars.length; j++) closest = Math.min(closest, angle(stars[i].at, stars[j].at));
+      for (let j = i + 1; j < stars.length; j++) least = Math.min(least, angle(stars[i].at, stars[j].at));
     }
-    assert.ok(degrees(closest) > 5.5, `${count} skills: the closest two are ${degrees(closest).toFixed(1)}° apart`);
+    return degrees(least);
+  };
+  const plugins: string[] = [];
+  for (let plugin = 0; plugin < 30; plugin++) {
+    for (let i = 0; i <= plugin % 6; i++) plugins.push(`plugins/p${plugin}/skills/s${plugins.length}/SKILL.md`);
   }
+  const skies: Record<string, string[]> = {
+    '2 in one directory': Array.from({ length: 2 }, (_, i) => `skills/s${i}/SKILL.md`),
+    '40 in two directories': Array.from({ length: 40 }, (_, i) => `${i % 3 === 0 ? 'docs' : '.claude/skills'}/s${i}/SKILL.md`),
+    '600 in one directory': Array.from({ length: 600 }, (_, i) => `skills/s${i}/SKILL.md`),
+    '50 directories of 2': Array.from({ length: 100 }, (_, i) => `d${i >> 1}/s${i}/SKILL.md`),
+    '30 plugins of 1 to 6': plugins,
+    '200 directories of 1': Array.from({ length: 200 }, (_, i) => `d${i}/s${i}/SKILL.md`),
+  };
+  for (const [sky, paths] of Object.entries(skies)) {
+    const least = closest(paths);
+    assert.ok(least > 5.5, `${sky}: the closest two stars are ${least.toFixed(1)}° apart`);
+  }
+});
+
+test('a thousand skills in one directory are charted at once, with their figure', () => {
+  const skills = Array.from({ length: 1000 }, (_, i) => skill(`skills/s${i}/SKILL.md`));
+  const started = performance.now();
+  const chart = chartOf(scanned(skills));
+  const took = performance.now() - started;
+  assert.ok(took < 3000, `charted in ${Math.round(took)} ms`);
+  assert.equal(chart.constellations[0].lines.length, 999 + 200, 'a tree through a thousand stars, and a loop per five');
+  for (const star of chart.stars) assert.ok(star.at.every(Number.isFinite), `${star.name} is somewhere`);
 });
 
 test('no SKILL.md → an empty chart', () => {

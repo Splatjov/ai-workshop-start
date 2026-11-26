@@ -54,6 +54,14 @@ const unit = (a: Vec3): Vec3 => {
   return [a[0] / length, a[1] / length, a[2] / length];
 };
 
+/**
+ * A disc drawn on flat paper, laid on the sphere with its area kept: the angle its radius becomes.
+ * Small discs keep their radius; one of radius 2 wraps the whole sphere.
+ */
+const round = (radius: number) => Math.acos(clamp(1 - (radius * radius) / 2, -1, 1));
+/** The other way: the flat radius of a cap of the sphere. */
+const flat = (cap: number) => Math.sqrt(2 * (1 - Math.cos(cap)));
+
 /** The angle between two points of the sphere, in radians. */
 export function angle(a: Vec3, b: Vec3): number {
   return Math.acos(clamp(dot(a, b), -1, 1));
@@ -110,28 +118,37 @@ export function chartOf(view: Scanned): Chart {
   const rand = random(seed);
   const zenith = offset(offset([0, 0, 1], rand() * Math.PI * 2, 0), rad(-30 + rand() * 60), Math.PI / 2);
 
-  // The more skills, the more of the sky they take, and the closer they may come.
+  // The more skills, the more of the sky they take, and the closer they may come. A sky too full
+  // for the smallest gap takes a smaller one still: the sphere has only so much room.
   const cap = clamp(rad(17) * Math.sqrt(skills.length), rad(22), rad(100));
-  const apart = clamp((cap * 1.25) / Math.sqrt(Math.max(1, skills.length)), rad(7), rad(20));
+  const room = Math.sqrt((0.72 * 4 * Math.PI) / (0.866 * Math.max(1, skills.length)));
+  const apart = Math.min(clamp((cap * 1.25) / Math.sqrt(Math.max(1, skills.length)), rad(7), rad(20)), room);
 
   const names = [...new Set(skills.map((skill) => home(skill.path)))].sort();
   const members = names.map((name) => skills.flatMap((skill, index) => (home(skill.path) === name ? [index] : [])));
+
+  // The constellations' centres: a sunflower round the zenith, over as much sky as all the stars
+  // need at that gap, or over the middle of the cap if that is more.
+  const needed = Math.min(2, Math.sqrt((skills.length * 0.866 * apart * apart) / 0.72 / Math.PI));
+  const typical = 0.75 * apart * (members.reduce((sum, stars) => sum + Math.sqrt(stars.length), 0) / Math.max(1, names.length));
+  const over = Math.max(flat(cap * 0.62), needed - typical);
   const phase = rand() * Math.PI * 2;
   const centres = names.map((_, i) =>
-    names.length === 1 ? zenith : offset(zenith, cap * 0.62 * Math.sqrt((i + 0.5) / names.length), phase + i * GOLDEN),
+    names.length === 1 ? zenith : offset(zenith, round(over * Math.sqrt((i + 0.5) / names.length)), phase + i * GOLDEN),
   );
 
-  // A sunflower around each constellation's centre, then pushed apart until nothing crowds.
+  // A sunflower around each constellation's centre, then pushed apart as far as the sky has room.
   const at: Vec3[] = [];
   const of: number[] = [];
   members.forEach((stars, c) => {
     const turn = rand() * Math.PI * 2;
+    const step = Math.min(apart * 0.8, 1.96 / Math.sqrt(stars.length)); // the whole sphere, at most
     stars.forEach((star, k) => {
-      at[star] = offset(centres[c], apart * 0.8 * Math.sqrt(k + 0.35), turn + k * GOLDEN);
+      at[star] = offset(centres[c], round(step * Math.sqrt(k + 0.35)), turn + k * GOLDEN);
       of[star] = c;
     });
   });
-  spread(at, of, centres, members.map((stars) => apart * 0.75 * Math.sqrt(stars.length)), apart);
+  spread(at, of, centres, members.map((stars) => round(apart * 0.75 * Math.sqrt(stars.length))), apart);
 
   const stars = skills.map((skill, index) => ({
     id: skill.id,
@@ -151,28 +168,35 @@ export function chartOf(view: Scanned): Chart {
   return { seed, zenith, stars, constellations };
 }
 
-/** Pushes stars closer than `apart` away from each other, and keeps each within reach of its centre. */
+/**
+ * Pushes stars closer than `apart` away from each other, and keeps each within reach of its centre.
+ * Where many constellations share little sky, the two pull against each other; so the last passes
+ * have no centre to hold to, and push apart whatever still crowds.
+ */
 function spread(at: Vec3[], of: number[], centres: Vec3[], reach: number[], apart: number) {
-  const near = Math.cos(apart * 1.9); // most pairs are further apart than any wanted gap: a product tells
   const passes = clamp(Math.round(36000 / Math.max(1, at.length)), 12, 90); // a huge sky settles for less
-  for (let pass = 0; pass < passes; pass++) {
+  const push = (wanted: (i: number, j: number) => number, widest: number, strength: number) => {
+    const near = Math.cos(widest); // most pairs are further apart than any wanted gap: a product tells
     for (let i = 0; i < at.length; i++) {
       for (let j = i + 1; j < at.length; j++) {
         if (dot(at[i], at[j]) < near) continue;
-        const wanted = of[i] === of[j] ? apart : apart * 1.9;
         const gap = angle(at[i], at[j]);
-        if (gap >= wanted) continue;
-        const push = (wanted - gap) * 0.3;
+        const by = (wanted(i, j) - gap) * strength;
+        if (by <= 0) continue;
         const [a, b] = [at[i], at[j]];
-        at[i] = gap < 1e-6 ? offset(a, push, i) : towards(a, b, -push);
-        at[j] = gap < 1e-6 ? offset(b, push, j + Math.PI) : towards(b, a, -push);
+        at[i] = gap < 1e-6 ? offset(a, by, i) : towards(a, b, -by);
+        at[j] = gap < 1e-6 ? offset(b, by, j + Math.PI) : towards(b, a, -by);
       }
     }
+  };
+  for (let pass = 0; pass < passes; pass++) {
+    push((i, j) => (of[i] === of[j] ? apart : apart * 1.9), apart * 1.9, 0.3);
     for (let i = 0; i < at.length; i++) {
       const far = angle(at[i], centres[of[i]]) - reach[of[i]];
       if (far > 0) at[i] = towards(at[i], centres[of[i]], far * 0.3);
     }
   }
+  for (let pass = 0; pass < Math.max(10, Math.round(passes / 3)); pass++) push(() => apart * 0.92, apart * 0.92, 0.5);
 }
 
 /** A copy sits a few degrees from its skill, at a bearing its own path picks. */
@@ -182,29 +206,44 @@ function companions(skill: SkillView, at: Vec3): Vec3[] {
 
 /** The figure of a constellation: the shortest tree through its stars, and a loop per five of them. */
 function figure(stars: number[], at: Vec3[]): [number, number][] {
-  if (stars.length < 2) return [];
+  const count = stars.length;
+  if (count < 2) return [];
+  const between = (i: number, j: number) => angle(at[stars[i]], at[stars[j]]);
+  const key = (i: number, j: number) => (i < j ? i * count + j : j * count + i);
+
+  // Prim's: each star not yet joined remembers the joined star nearest to it.
+  const joined = new Array<boolean>(count).fill(false);
+  const nearest = new Array<number>(count).fill(0);
+  const gap = stars.map((_, i) => between(0, i));
+  joined[0] = true;
   const lines: [number, number][] = [];
-  const joined = new Set([stars[0]]);
-  while (joined.size < stars.length) {
-    let best: [number, number] | undefined;
-    let shortest = Infinity;
-    for (const a of joined) {
-      for (const b of stars) {
-        if (joined.has(b)) continue;
-        const gap = angle(at[a], at[b]);
-        if (gap < shortest) [shortest, best] = [gap, [a, b]];
-      }
-    }
-    joined.add(best![1]);
-    lines.push(best!);
-  }
-  const has = (a: number, b: number) => lines.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
-  const spare: { gap: number; line: [number, number] }[] = [];
-  for (let i = 0; i < stars.length; i++) {
-    for (let j = i + 1; j < stars.length; j++) {
-      if (!has(stars[i], stars[j])) spare.push({ gap: angle(at[stars[i]], at[stars[j]]), line: [stars[i], stars[j]] });
+  const tree = new Set<number>();
+  for (let added = 1; added < count; added++) {
+    let next = -1;
+    for (let i = 0; i < count; i++) if (!joined[i] && (next < 0 || gap[i] < gap[next])) next = i;
+    joined[next] = true;
+    lines.push([nearest[next], next]);
+    tree.add(key(nearest[next], next));
+    for (let i = 0; i < count; i++) {
+      if (joined[i]) continue;
+      const away = between(next, i);
+      if (away < gap[i]) [gap[i], nearest[i]] = [away, next];
     }
   }
-  spare.sort((a, b) => a.gap - b.gap || a.line[0] - b.line[0] || a.line[1] - b.line[1]);
-  return [...lines, ...spare.slice(0, Math.floor(stars.length / 5)).map(({ line }) => line)];
+
+  // The loops: the shortest of the lines from each star to the nearest one the tree does not join it to.
+  const loops = Math.floor(count / 5);
+  const spare = new Map<number, { gap: number; line: [number, number] }>();
+  for (let i = 0; loops > 0 && i < count; i++) {
+    let best = -1;
+    let least = Infinity;
+    for (let j = 0; j < count; j++) {
+      if (j === i || tree.has(key(i, j))) continue;
+      const away = between(i, j);
+      if (away < least) [least, best] = [away, j];
+    }
+    if (best >= 0) spare.set(key(i, best), { gap: least, line: [Math.min(i, best), Math.max(i, best)] });
+  }
+  const shortest = [...spare.values()].sort((a, b) => a.gap - b.gap || a.line[0] - b.line[0] || a.line[1] - b.line[1]);
+  return [...lines, ...shortest.slice(0, loops).map(({ line }) => line)].map(([a, b]) => [stars[a], stars[b]]);
 }

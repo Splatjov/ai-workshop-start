@@ -95,6 +95,7 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
 
   const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   canvas.dataset.motion = still ? 'still' : 'boiling';
+  canvas.dataset.frame = '0'; // which of the boil's three frames is drawn, as drawably's --drawably-frame
 
   const scene = new Scene();
   const camera = new PerspectiveCamera();
@@ -500,6 +501,9 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
   const spin = new Vector3();
   const pointer = { x: 0, y: 0, known: false };
   let drag: { x: number; y: number; travelled: number; at: number } | undefined;
+  /** Where the pointer is over the globe's slot, if it is. */
+  let hover: { x: number; y: number } | undefined;
+  let coasting = false;
   let touched = -10;
   let turning: { from: Quaternion; to: Quaternion; time: number; duration: number } | undefined;
   let innerTurn = 0;
@@ -641,6 +645,8 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
     chosen = next;
     skillPen.uniforms.uSelected.value = chosen;
     chosenRing.visible = chosen >= 0;
+    pointedRing.visible = pointed >= 0 && pointed !== chosen; // the chosen star has its own ring
+    measure(); // the chosen name is written larger
     if (chosen < 0) return;
     tween('chosen', 0.5, (t) => (chosenPen.uniforms.uReveal.value = t), 0.05);
     tween('swell', 0.9, (t) => (swell = Math.sin(t * Math.PI) * 0.035));
@@ -725,11 +731,18 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
     spin.set(0, 0, 0);
   }
 
+  /** Looks again at what the pointer is over: it moved, or the globe turned under it. */
+  function repoint() {
+    if (!hover || drag) return;
+    const over = under(hover.x, hover.y);
+    slot.toggleAttribute('data-over', over >= 0);
+    if (over !== pointed) events.point(over >= 0 ? current?.stars[over].id : undefined);
+  }
+
   function move(event: PointerEvent) {
+    hover = { x: event.clientX, y: event.clientY };
     if (!drag) {
-      const over = under(event.clientX, event.clientY);
-      slot.toggleAttribute('data-over', over >= 0);
-      if (over !== pointed) events.point(over >= 0 ? current?.stars[over].id : undefined);
+      repoint();
       return;
     }
     const dx = event.clientX - drag.x;
@@ -766,10 +779,12 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
       const over = under(event.clientX, event.clientY);
       if (over >= 0 && current) events.choose(current.stars[over].id);
     }
+    if (event.type === 'pointerup') repoint();
   }
 
   function leave() {
     if (drag) return;
+    hover = undefined;
     slot.removeAttribute('data-over');
     if (pointed >= 0) events.point(undefined);
   }
@@ -809,6 +824,11 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
     flat.right = width;
     flat.bottom = height;
     flat.updateProjectionMatrix();
+    measure();
+  }
+
+  /** How much room each name takes on the page, as it is written now. */
+  function measure() {
     for (const label of names) {
       label.width = label.text.offsetWidth;
       label.height = label.text.offsetHeight;
@@ -859,12 +879,19 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
     if (turning) {
       turning.time += dt / turning.duration;
       turn.slerpQuaternions(turning.from, turning.to, ease(Math.min(1, turning.time)));
-      if (turning.time >= 1) turning = undefined;
+      if (turning.time >= 1) {
+        turning = undefined;
+        repoint();
+      }
     } else if (!drag) {
       const speed = spin.length();
       if (speed > 1e-3) {
         turn.premultiply(q.setFromAxisAngle(w.copy(spin).normalize(), speed * dt));
         spin.multiplyScalar(Math.exp(-dt * 2.6));
+        coasting = true;
+      } else if (coasting) {
+        coasting = false;
+        repoint();
       }
       // With nothing charted, the sky drifts round its own axis.
       if (!current && !still && !lostOn && time - touched > 2.2) turn.multiply(q.setFromAxisAngle(Y, 0.055 * dt));
@@ -1016,7 +1043,11 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
 
     resize();
     place(dt);
-    shared.uBoil.value = still ? 0 : Math.floor(now / 400) % 3;
+    const boil = still ? 0 : Math.floor(now / 400) % 3;
+    if (boil !== shared.uBoil.value) {
+      shared.uBoil.value = boil;
+      canvas.dataset.frame = String(boil);
+    }
 
     for (const [key, item] of tweens) {
       item.time += dt;

@@ -242,14 +242,15 @@ function Result({
   const { repository, skills, warnings } = view;
   const list = useRef<HTMLUListElement>(null);
 
-  // A star chosen on the globe comes into view in the index; the page itself does not move.
+  // The chosen skill comes into view in the index, however it was chosen: by a click, a key or its
+  // star on the globe. The index scrolls; the page itself does not move.
   useEffect(() => {
     const index = list.current;
     const current = index?.querySelector<HTMLElement>('[aria-current="true"]');
     if (!index || !current || index.scrollHeight <= index.clientHeight) return;
-    const [top, bottom] = [current.offsetTop - index.offsetTop, current.offsetTop - index.offsetTop + current.offsetHeight];
-    if (top < index.scrollTop) index.scrollTop = top - 8;
-    else if (bottom > index.scrollTop + index.clientHeight) index.scrollTop = bottom - index.clientHeight + 8;
+    const [frame, box] = [index.getBoundingClientRect(), current.getBoundingClientRect()];
+    if (box.top < frame.top + 12) index.scrollTop += box.top - frame.top - 12;
+    else if (box.bottom > frame.bottom - 26) index.scrollTop += box.bottom - frame.bottom + 26;
   }, [selected?.id]);
 
   /** Down and up choose the next and the previous skill, and the globe turns to its star. */
@@ -275,12 +276,16 @@ function Result({
           </DrawablyBadge>
         </h2>
 
-        {warnings.map((warning) => (
-          <p className="warning" role="note" key={warning}>
-            <AlertTriangle size={18} color="var(--warn)" />
-            {warning}
-          </p>
-        ))}
+        {warnings.length > 0 && (
+          <div className="warnings">
+            {warnings.map((warning) => (
+              <p className="warning" role="note" key={warning}>
+                <AlertTriangle size={18} color="var(--warn)" />
+                {warning}
+              </p>
+            ))}
+          </div>
+        )}
 
         {skills.length === 0 && <p className="void">A dark sky: there is no SKILL.md in this repository.</p>}
 
@@ -320,9 +325,7 @@ function Result({
 
       {selected && (
         <DrawablyCard key={selected.id} className="skill" aria-label={`${selected.name}: SKILL.md`} role="region">
-          <p className="size">
-            {lines(selected.markdown).length} lines · {bytes(selected.markdown)}
-          </p>
+          <p className="size">{size(selected.markdown)}</p>
           <h3 style={{ '--fit': Math.min(1, 15 / selected.name.length) } as CSSProperties}>
             <FileText size={26} color={INK} /> {selected.name}
           </h3>
@@ -384,9 +387,11 @@ function lines(text: string): string[] {
   return text.match(/[^\n]*\n|[^\n]+$/g) ?? [];
 }
 
-function bytes(text: string): string {
-  const size = new TextEncoder().encode(text).length;
-  return size < 1000 ? `${size} B` : `${(size / 1000).toFixed(1)} kB`;
+/** `7 lines · 144 B`; from a thousand bytes, `1.4 kB`. */
+function size(text: string): string {
+  const count = lines(text).length;
+  const bytes = new TextEncoder().encode(text).length;
+  return `${count} ${count === 1 ? 'line' : 'lines'} · ${bytes < 1000 ? `${bytes} B` : `${(bytes / 1000).toFixed(1)} kB`}`;
 }
 
 function firstSentence(text: string): string {

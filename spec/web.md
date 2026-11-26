@@ -13,9 +13,10 @@ site in `web/dist`.
 - The first skill is chosen; clicking another chooses it; in the index, `↓` and `↑` choose the next
   and the previous
 - The chosen skill: name, the whole description, the link pinned to the scanned commit,
-  `also in <paths>` for copies, its size (`N lines · N B`), and its `SKILL.md` *as scanned*, front
-  matter included, as text, line by line
-- Warnings: under the repository, as notes
+  `also in <paths>` for copies, its size (`7 lines · 144 B`; in `kB` from a thousand bytes), and its
+  `SKILL.md` *as scanned*, front matter included, as text, line by line
+- The chosen skill stays in view in the index, however long the index and however it was chosen
+- Warnings: under the repository, as notes; however many, the index keeps its room
 - An unreachable repository, an unknown ref, a non-GitHub link → the CLI's message, as an alert
 - No `SKILL.md` → `0 skills`, nothing to choose
 - `?repo=<URL>` in the page's address scans at once; scanning writes it there, so a scan can be
@@ -23,8 +24,8 @@ site in `web/dist`.
 - Nothing scanned yet: three repositories to scan with one click
 ## The sky
 - A globe of glass, in pen on paper: its far side shows through, and its lines *boil* as drawably's do
-- Every skill is a **star**, with its name beside it; the longer its `SKILL.md`, the brighter.
-  A copy is a ring beside its skill
+- Every skill is a **star**, with its name beside it, or above it where there is no room beside;
+  the longer its `SKILL.md`, the brighter. A copy is a ring beside its skill
 - The directory that holds the skills' folders is their **constellation**: a figure joins its stars
 - The *scanned commit* seeds the sky: the same commit, the same sky
 - Clicking a star chooses its skill; the chosen star is circled in red, and turns to the front

@@ -13,6 +13,25 @@ export const KOOG_MD = '---\nname: agents\ndescription: Build an agent with Koog
 
 const blob = (path: string) => ({ path, mode: '100644', type: 'blob', sha: path });
 
+// JetBrains/many: 24 skills in one directory. The second is over a thousand bytes, the third is one
+// line with no front matter, and the last eight have malformed front matter: nine warnings. The
+// last one's name is too long to be written beside its star.
+export const MANY_LONG_NAME = 'skill-24-with-a-very-long-name';
+export const MANY_BIG_MD = `---\nname: skill-02\ndescription: The long one.\n---\n# Skill 02\n\n${'Read the module, run the checks, write down what changed.\n'.repeat(24)}`;
+export const MANY_ONE_LINE_MD = '# Skill 03';
+const many = Array.from({ length: 24 }, (_, i) => {
+  const name = i === 23 ? MANY_LONG_NAME : `skill-${String(i + 1).padStart(2, '0')}`;
+  const text =
+    i === 1
+      ? MANY_BIG_MD
+      : i === 2
+        ? MANY_ONE_LINE_MD
+        : i >= 16
+          ? `---\nname: ${name}: broken: x\n---\n# ${name}\n`
+          : `---\nname: ${name}\ndescription: Does the thing number ${i + 1}.\n---\n# ${name}\n`;
+  return { path: `.claude/skills/${name}/SKILL.md`, text };
+});
+
 export const RECORDING: Recording = {
   // JetBrains/atlas-demo: a skill and its copy, one more, and one with malformed front matter.
   [`${API}/JetBrains/atlas-demo`]: ok({ full_name: 'JetBrains/atlas-demo', default_branch: 'main' }),
@@ -44,6 +63,11 @@ export const RECORDING: Recording = {
   [`${API}/JetBrains/koog/commits/develop`]: ok({ sha: COMMIT }),
   [`${API}/JetBrains/koog/git/trees/${COMMIT}?recursive=1`]: ok({ truncated: false, tree: [blob('.claude/skills/agents/SKILL.md')] }),
   [`${RAW}/JetBrains/koog/${COMMIT}/.claude/skills/agents/SKILL.md`]: ok(KOOG_MD),
+
+  [`${API}/JetBrains/many`]: ok({ full_name: 'JetBrains/many', default_branch: 'main' }),
+  [`${API}/JetBrains/many/commits/main`]: ok({ sha: COMMIT }),
+  [`${API}/JetBrains/many/git/trees/${COMMIT}?recursive=1`]: ok({ truncated: false, tree: many.map(({ path }) => blob(path)) }),
+  ...Object.fromEntries(many.map(({ path, text }) => [`${RAW}/JetBrains/many/${COMMIT}/${path}`, ok(text)])),
 
   // JetBrains/no-such-repository: not there.
   [`${API}/JetBrains/no-such-repository`]: { status: 404, body: { message: 'Not Found' } },
