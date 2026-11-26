@@ -17,7 +17,7 @@ Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests; `n
 A `/tree/<commit>` URL scans that commit: `./skill-atlas scan https://github.com/JetBrains/koog/tree/709079e`.
 
 In the browser: `npm run web` opens a hand-drawn page with a field for the repository link, its
-skills and each one's `SKILL.md`, with six example repositories one click away; `npm run test:web`
+skills and each one's `SKILL.md`, with nine example repositories one click away; `npm run test:web`
 clicks through it in Chromium.
 
 - [spec/](spec/): what it does. [AGENTS.md](AGENTS.md): the definition of done.

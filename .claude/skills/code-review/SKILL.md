@@ -30,6 +30,13 @@ diff against `origin/<base>`.
 
 Empty diff → report "Nothing to review" and stop.
 
+Stacked PRs: when the body says it builds on another PR (or `gh pr list` shows an open PR whose head
+is an ancestor of this one), that PR's commits are in this diff too. If it is still open, review only
+`git diff origin/<its head>...HEAD`, run the checks on the full head, and point to that PR's review
+for the rest. It often merges while this run works: re-check (`gh pr view <m> --json state`) and
+re-fetch `origin/<base>` before reporting; once merged, the plain `origin/<base>...HEAD` diff is
+just this PR's own commits. Name in the report what you reviewed (`<sha> only, #m merged`).
+
 The skill's own file (`.claude/skills/code-review/SKILL.md`) and other agent tooling under `.claude/`
 may be part of the diff: review it as documentation (does it match the repository?), not as product
 code, and mention it under "Checked, no problem".
