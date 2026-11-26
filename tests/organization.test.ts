@@ -163,6 +163,23 @@ test('organization, with a token, past its hourly limit → the message says whe
   });
 });
 
+test('organization, with a token, a limit that resets within a minute → try again in a minute', async () => {
+  const recorded = github().fetch;
+  const reset = Math.floor(Date.now() / 1000) + 30;
+  const fetch: Fetch = async (url, init) =>
+    url === 'https://api.github.com/repos/atlas-org/beta/commits/main'
+      ? new Response(JSON.stringify({ message: 'API rate limit exceeded for user ID 1.' }), {
+          status: 403,
+          headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(reset) },
+        })
+      : recorded(url, init);
+  assert.deepEqual(await atlas(['scan', 'https://github.com/atlas-org'], { fetch, token: 'secret' }), {
+    code: 1,
+    stdout: '',
+    stderr: 'GitHub rate limit reached; try again in a minute',
+  });
+});
+
 test('organization: the repository list is read page by page', async () => {
   const repositories = Array.from({ length: 101 }, (_, index) => ({
     full_name: `many/r${index}`,
