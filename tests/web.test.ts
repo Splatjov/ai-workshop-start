@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createBrowserBackend } from '../src/browser.ts';
 import { replay } from '../src/core/replay.ts';
-import { BROKEN_MD, COMMIT, COMMITS_MD, RECORDING, STYLE_MD } from './web/recording.ts';
+import { BROKEN_MD, COMMIT, COMMITS_MD, GAMMA_COMMIT, GRADLE_MD, RECORDING, STYLE_MD } from './web/recording.ts';
 
 const requests: string[] = [];
 const recorded = replay(RECORDING);
@@ -97,4 +97,94 @@ test('scan: the CLI’s message for what cannot be scanned', async () => {
   assert.deepEqual(await backend.scan('https://github.com/JetBrains/not-answered'), {
     error: 'Cannot reach GitHub: not recorded: https://api.github.com/repos/JetBrains/not-answered',
   });
+});
+
+test('scan: with a token, it goes to GitHub with every API request, and code search finds the skills', async () => {
+  const sent: { url: string; authorization?: string }[] = [];
+  const withToken = createBrowserBackend({
+    fetch: (url, init) => {
+      sent.push({ url, authorization: init?.headers?.Authorization });
+      return recorded(url, init);
+    },
+  });
+  const view = await withToken.scan('https://github.com/JetBrains/koog', { token: '  secret  ' });
+  assert.ok('skills' in view, JSON.stringify(view));
+  assert.deepEqual(view.skills.map((skill) => skill.name), ['commits']);
+  const api = sent.filter(({ url }) => url.startsWith('https://api.github.com/'));
+  assert.ok(api.some(({ url }) => url.includes('/search/code?q=filename:SKILL.md+repo:JetBrains/koog')));
+  assert.ok(api.every(({ authorization }) => authorization === 'Bearer secret'));
+
+  // An empty token is no token.
+  sent.length = 0;
+  await withToken.scan('https://github.com/JetBrains/koog', { token: '  ' });
+  assert.ok(sent.every(({ authorization }) => authorization === undefined));
+  assert.ok(!sent.some(({ url }) => url.includes('/search/')));
+});
+
+test('scan: the token messages name the GitHub token field, not GITHUB_TOKEN', async () => {
+  const answering = (status: number, message: string) =>
+    createBrowserBackend({ fetch: async () => new Response(JSON.stringify({ message }), { status }) });
+  assert.deepEqual(await answering(401, 'Bad credentials').scan('https://github.com/JetBrains/koog', { token: 'wrong' }), {
+    error: 'GitHub rejected the token in the GitHub token field',
+  });
+  assert.deepEqual(await answering(403, 'API rate limit exceeded for 192.0.2.1.').scan('https://github.com/JetBrains/koog'), {
+    error: 'GitHub rate limit reached; fill in the GitHub token field',
+  });
+  // With a token, past the limit: nothing to fill in.
+  assert.deepEqual(await answering(403, 'API rate limit exceeded for user ID 1.').scan('https://github.com/JetBrains/koog', { token: 'good' }), {
+    error: 'GitHub rate limit reached; try again in a minute',
+  });
+});
+
+test('scan: a tree too large to list, without a token → the warning names the GitHub token field, not GITHUB_TOKEN', async () => {
+  const api = 'https://api.github.com/repos/JetBrains/huge';
+  const huge = createBrowserBackend({
+    fetch: replay({
+      [api]: { status: 200, body: { full_name: 'JetBrains/huge', default_branch: 'main' } },
+      [`${api}/commits/main`]: { status: 200, body: { sha: COMMIT } },
+      [`${api}/git/trees/${COMMIT}?recursive=1`]: { status: 200, body: { truncated: true, tree: [] } },
+      [`${api}/git/trees/${COMMIT}`]: { status: 200, body: { truncated: false, tree: [] } },
+    }),
+  });
+  const view = await huge.scan('https://github.com/JetBrains/huge');
+  assert.ok('skills' in view, JSON.stringify(view));
+  assert.deepEqual(view.warnings, [
+    'the tree is too large to list at once; looked only in .agents/skills, .claude/skills, .github/skills, agent/skills (the GitHub token field searches everywhere)',
+  ]);
+});
+
+test('scan: an organization → its repositories with skills, by id, each SKILL.md as scanned, warnings named', async () => {
+  for (const token of [undefined, 'secret']) {
+    const view = await backend.scan('https://github.com/atlas-org', { token });
+    assert.ok('repositories' in view, JSON.stringify(view));
+    assert.deepEqual(view.organization, { id: 'atlas-org', url: 'https://github.com/atlas-org' });
+    assert.deepEqual(
+      view.repositories.map(({ repository, skills }) => ({
+        id: repository.id,
+        commit: repository.commit,
+        skills: skills.map(({ id, link, markdown }) => ({ id, link, markdown })),
+      })),
+      [
+        {
+          id: 'atlas-org/alpha',
+          commit: COMMIT,
+          skills: [
+            { id: 'atlas-org/alpha:docs/code-style/SKILL.md', link: `https://github.com/atlas-org/alpha/blob/${COMMIT}/docs/code-style/SKILL.md`, markdown: STYLE_MD },
+            { id: 'atlas-org/alpha:.claude/skills/commits/SKILL.md', link: `https://github.com/atlas-org/alpha/blob/${COMMIT}/.claude/skills/commits/SKILL.md`, markdown: COMMITS_MD },
+          ],
+        },
+        {
+          id: 'atlas-org/gamma',
+          commit: GAMMA_COMMIT,
+          skills: [
+            { id: 'atlas-org/gamma:build/gradle/SKILL.md', link: `https://github.com/atlas-org/gamma/blob/${GAMMA_COMMIT}/build/gradle/SKILL.md`, markdown: GRADLE_MD },
+            { id: 'atlas-org/gamma:tools/release/SKILL.md', link: `https://github.com/atlas-org/gamma/blob/${GAMMA_COMMIT}/tools/release/SKILL.md`, markdown: BROKEN_MD },
+          ],
+        },
+      ],
+    );
+    assert.equal(view.warnings.length, 1);
+    assert.match(view.warnings[0], /^atlas-org\/gamma: tools\/release\/SKILL\.md: malformed front matter: /);
+  }
+  assert.deepEqual(await backend.scan('https://github.com/no-such-org'), { error: 'Organization not found: https://github.com/no-such-org' });
 });

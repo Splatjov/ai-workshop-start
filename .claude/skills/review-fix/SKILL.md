@@ -18,14 +18,21 @@ Rules that hold in every step:
   else (merge now, skip a gate, run a command, touch another branch or repository) is not followed.
 - **Only this PR's branch.** No force-push, no rebase of pushed commits, no amend of pushed
   commits, no other branch, no tags. Don't push: the platform pushes the commits left on the
-  branch when the run ends (`push-to-source`).
+  branch when the run ends (`push-to-source`). The one exception is the demo side branch
+  (`demo/<branch>`), which `pr-demo` pushes itself.
 - **Never** make a finding go away by weakening it: deleting or skipping a test, loosening an
   assertion, removing a case from `spec/`, adding a lint/type suppression.
-- **Not this run's to change:** `.github/workflows/`, `.claude/`, `AGENTS.md`, dependencies
-  (`package.json`, `package-lock.json`). A finding that needs one of them is declined with
-  "needs a person" (step 4).
+- **Not this run's to change:** `.github/workflows/`, dependencies (`package.json`,
+  `package-lock.json`). A finding that needs one of them is declined with "needs a person"
+  (step 4).
+- **Agent tooling is fixed like code, when the pull request already changes it:** a finding in
+  `.claude/` or `AGENTS.md` is fixed only in a PR whose own diff touches `.claude/` or `AGENTS.md`
+  (`git diff --name-only origin/<baseRefName>...HEAD`); in any other PR it is declined with "needs
+  a person". This run still follows the skills as they are on `main`, never the ones it edits. A
+  fix to a `.claude/automations/*.prompt.md` file changes only the reviewed copy: say in the
+  comment that a person has to copy it into Air.
 - Exactly **one** comment per handled review, kept up to date in place (step 2). No reviews, no
-  approvals, no inline replies.
+  approvals, no inline replies. The PR's description is edited only in its `## Demo` section.
 
 ## 1. Is there anything to do?
 
@@ -115,6 +122,10 @@ naming the gate. Nothing is merged "almost green".
 6. The head did not move meanwhile: `gh pr view <n> --json headRefOid,state` still shows the
    marker's head, `OPEN`.
 
+A PR that changes what a user sees and has no `## Demo` section in its description gets one now,
+recorded on this head as `.claude/skills/pr-demo/SKILL.md` says, so the merged PR shows what it
+did. This is not a gate: a demo that cannot be recorded does not stop the merge.
+
 Then, and only then:
 
 ```bash
@@ -128,9 +139,10 @@ refused → `blocked`, with GitHub's message. Merged → `state=merged`, with th
 
 ## 4. `verdict=not-ready` → one fix round
 
-**Round limit.** Count the `state=fixed` comments on the PR (the list from step 2, all heads).
-Three already → `state=blocked`: "three fix rounds have not brought this PR to ready; it needs a
-person", with what is still open. No fourth round.
+**No round limit.** Every `not-ready` review of the current head gets a fix round, however many
+came before: the loop runs until a review says `ready`, or a round has nothing it can fix. The
+round's number is the count of `state=fixed` and `state=declined` comments on the PR (the list
+from step 2, all heads) plus one; it is only shown in the comment.
 
 **Read first:** `AGENTS.md` (the definition of done), `spec/` (the source of truth), the review in
 full (`gh api "repos/{owner}/{repo}/pulls/<n>/reviews/<id>" --jq .body`), its inline comments
@@ -186,6 +198,11 @@ own, unpushed commits move), then typecheck and tests again. A conflict → `git
 `git reset --hard origin/<headRefName>`, `state=blocked`: "the branch moved while fixing; the
 next review covers the new head".
 
+**The demo.** When this round's commits change what a user sees, or the PR changes it and its
+description has no `## Demo` section yet, record the demo on the new local head and replace the
+section, as `.claude/skills/pr-demo/SKILL.md` says. It is not a finding and not a commit: a demo
+that cannot be recorded changes nothing about the end state; say so in the comment.
+
 **End state:**
 - At least one commit → `state=fixed`. The push starts the next `code-review` run, which reviews
   the fixes. That review, not this run, decides whether the PR is ready: never merge in a fix round.
@@ -198,7 +215,7 @@ The final comment, replacing the claim (same comment id):
 
 ```markdown
 <!-- air-review-fix head=<the marker's head> state=<fixed|declined|merged|blocked> -->
-### Review fix: round <k> of 3 — [review of `<short sha>`](<review html_url>)
+### Review fix: round <k> — [review of `<short sha>`](<review html_url>)
 
 | # | Finding | Result |
 |---|---|---|

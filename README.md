@@ -13,14 +13,19 @@ build-tools-bump-gradle-api — Bumps the Gradle API version that Kotlin Gradle 
 …
 ```
 
-Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests; `npm run test:e2e`, the end-to-end ones on real repositories.
+`./skill-atlas scan https://github.com/JetBrains` scans every repository of an organization;
+`--filter "gradle api"` shows only the skills with those words in their name, description or path.
+
+Set `GITHUB_TOKEN` in the environment for a higher GitHub rate limit, which an organization needs:
+`GITHUB_TOKEN=<token> ./skill-atlas scan …`; in the browser, paste it into the *GitHub token* field. `npm test` runs the tests; `npm run test:e2e`, the end-to-end ones on real repositories.
 A `/tree/<commit>` URL scans that commit: `./skill-atlas scan https://github.com/JetBrains/koog/tree/709079e`.
 
 In the browser: `npm run web` opens an atlas of worlds, drawn by hand. Every repository you scan is
 a world of a system, and the more alike the skills of two repositories, the closer their worlds
-stand; nine example repositories wait on the rim, one click away. Zoom into a world for its map: a
-land for every directory, a place for every skill, and each one's `SKILL.md`. `npm run test:web`
-clicks through it in Chromium.
+stand; scan an organization, and every repository of it is one. Nine example repositories wait on
+the rim, one click away. Zoom into a world for its map: a land for every directory, a place for
+every skill, and each one's `SKILL.md`, with a filter over them. `npm run test:web` clicks through
+it in Chromium.
 
 - [spec/](spec/): what it does. [AGENTS.md](AGENTS.md): the definition of done.
 - [fixture/](fixture/README.md): a small repository for the tests.

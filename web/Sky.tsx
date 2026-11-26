@@ -27,6 +27,8 @@ type Props = {
   at?: string;
   /** The chart of the world in view. */
   chart?: Chart;
+  /** The places of it that are named: those of the skills the filter leaves. None given, all. */
+  named?: string[];
   chosen?: string;
   pointed?: string;
   pointedWorld?: string;
@@ -37,7 +39,7 @@ type Props = {
   onPointWorld(key: string | undefined): void;
 };
 
-export function Sky({ slot, aim, worlds, names, kin, rim, at, chart, chosen, pointed, pointedWorld, theme, onChoose, onPoint, onVisit, onPointWorld }: Props) {
+export function Sky({ slot, aim, worlds, names, kin, rim, at, chart, named, chosen, pointed, pointedWorld, theme, onChoose, onPoint, onVisit, onPointWorld }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const written = useRef<HTMLDivElement>(null);
   const [engine, setEngine] = useState<Engine>();
@@ -117,6 +119,7 @@ export function Sky({ slot, aim, worlds, names, kin, rim, at, chart, chosen, poi
           <span
             key={place.id}
             data-place={place.id}
+            data-out={named && !named.includes(place.id) ? '' : undefined}
             data-chosen={place.id === chosen ? '' : undefined}
             data-pointed={place.id === pointed ? '' : undefined}
           >

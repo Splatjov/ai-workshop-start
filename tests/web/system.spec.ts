@@ -2,7 +2,7 @@
 // recorded GitHub answers.
 import { expect, test, type Page } from '@playwright/test';
 import { EXAMPLES } from '../../web/examples.ts';
-import { address, chosen, recorded, rested, scan, sky, where, world, worldButtons, type Recorded } from './github.ts';
+import { address, chosen, filterField, recorded, rested, scan, sky, where, world, worldButtons, type Recorded } from './github.ts';
 import { ink, pageScrolls, scrollToTop, scrolled, twoFingersApart } from './in-page.js';
 import { OTHER_EXAMPLES } from './recording.ts';
 
@@ -369,4 +369,68 @@ test('dragging over the system turns the plate', async ({ page }) => {
   await expect.poll(async () => between(await where(page, world(page, GARDEN)), before)).toBeGreaterThan(40);
   await expect(page.locator('.aim')).not.toHaveText(aim!);
   await expect(system(page)).toHaveText('The system 3 worlds'); // a drag is not a click
+});
+
+test('an organization: every repository of it that has skills is a world; its skills are read over the system', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('./');
+  await scan(page, 'https://github.com/atlas-org');
+  await expect(system(page)).toHaveText('atlas-org 4 skills in 2 repositories');
+  await expect(sky(page)).toHaveAttribute('data-view', 'system'); // the eye stays over the system
+  await expect(page.locator('[data-world][data-state="charted"] b')).toHaveText(['atlas-org/alpha', 'atlas-org/gamma']);
+  await expect(page.locator('[data-world]')).toHaveCount(EXAMPLES.length + 2); // the world that stood for the organization is gone
+  await expect(page.locator(`[data-kin="atlas-org/alpha|atlas-org/gamma"]`)).toHaveText(/^\d+%$/);
+
+  // The world of the chosen skill is marked; and of the skill pointed at.
+  const marked = page.locator('[data-world][data-pointed] b');
+  await expect(chosen(page)).toHaveAccessibleName('code-style: SKILL.md');
+  await expect(marked).toHaveText('atlas-org/alpha');
+  const skills = page.getByRole('navigation', { name: 'Skills' }).getByRole('button');
+  await skills.filter({ hasText: 'gradle' }).click();
+  await expect(chosen(page)).toHaveAccessibleName('gradle: SKILL.md');
+  await page.mouse.move(2, 2);
+  await expect(marked).toHaveText('atlas-org/gamma');
+  await skills.filter({ hasText: 'commits' }).hover();
+  await expect(marked).toHaveText('atlas-org/alpha');
+
+  // Back over the system, its worlds are in the register, and the organization over them.
+  await page.keyboard.press('Escape');
+  await expect(system(page)).toHaveText('The system 2 worlds');
+  await expect(worldButtons(page)).toHaveText([/^atlas-org\/alpha2 skills · nearest atlas-org\/gamma, \d+% alike$/, /^atlas-org\/gamma2 skills · nearest atlas-org\/alpha, \d+% alike$/]);
+  const organization = page.getByRole('navigation', { name: 'Organizations' }).getByRole('button');
+  await expect(organization).toHaveText('atlas-org 4 skills in 2 repositories');
+  expect(new URL(page.url()).searchParams.get('view')).toBe('system');
+
+  // One of its worlds, from close by: that repository's skills alone.
+  await worldButtons(page).last().click();
+  await expect(system(page)).toHaveText('atlas-org/gamma 2 skills');
+  await expect(sky(page)).toHaveAttribute('data-view', 'world');
+  await expect(page.locator('[data-place]')).toHaveText(['gradle', 'release']);
+  await page.keyboard.press('Escape');
+
+  // And the organization's skills again.
+  await organization.click();
+  await expect(system(page)).toHaveText('atlas-org 4 skills in 2 repositories');
+  await expect(sky(page)).toHaveAttribute('data-view', 'system');
+  expect(new URL(page.url()).searchParams.getAll('repo')[0]).toBe('https://github.com/atlas-org');
+});
+
+test('the filter, on the world: only the places of the skills listed are named', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('./');
+  await scan(page, 'https://github.com/JetBrains/atlas-demo');
+  await expect(page.locator('[data-place]:not([data-out])')).toHaveText(['code-style', 'commits', 'release']);
+
+  await filterField(page).fill('commit');
+  await expect(page.locator('[data-place]:not([data-out])')).toHaveText(['commits']);
+  await expect(page.locator('[data-place][data-out]')).toHaveText(['code-style', 'release']);
+  await expect(page.locator('[data-place]').filter({ hasText: 'code-style' })).toBeHidden();
+  // The first match is chosen, and its place turns to the front.
+  await expect(page.locator('[data-place][data-chosen]')).toHaveText('commits');
+  const slot = (await page.locator('.globe').boundingBox())!;
+  const commits = await where(page, page.locator('[data-place][data-chosen]'));
+  expect(Math.hypot(commits.x - (slot.x + slot.width / 2), commits.y - (slot.y + slot.height / 2))).toBeLessThan(Math.min(slot.width, slot.height) * 0.18);
+
+  await filterField(page).fill('');
+  await expect(page.locator('[data-place][data-out]')).toHaveCount(0);
 });

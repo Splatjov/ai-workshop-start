@@ -1,16 +1,29 @@
 # Web view
-`npm run web`: an **atlas of worlds**, drawn by hand. A field for a **GitHub repository link**;
-every repository scanned is a **world** of a system, *the more alike the skills of two, the closer
-they stand*; and, at a world, its skills as an index and as the places of its map, and the
-`SKILL.md` of the chosen one, on a sheet of its own. Hand-drawn:
+`npm run web`: an **atlas of worlds**, drawn by hand. A field for a **GitHub repository or
+organization link**, and one for a **GitHub token**; every repository scanned is a **world** of a
+system, *the more alike the skills of two, the closer they stand*; and, at a world, its skills as
+an index with a **filter** and as the places of its map, and the `SKILL.md` of the chosen one, on a
+sheet of its own. Hand-drawn:
 [drawably](https://www.npmjs.com/package/drawably) controls,
 [@sketchyicons/react](https://www.npmjs.com/package/@sketchyicons/react) icons, and the worlds, in
 WebGL ([three](https://www.npmjs.com/package/three)), in the same pen. `npm run web:build`: a static
 site in `web/dist`.
 ## Behaviour
-- The same scan as the CLI (`createBrowserBackend().scan`), from the browser, over live GitHub,
-  *without a token*; the same URLs, `/tree/<ref>` included
+- The same scan as the CLI (`createBrowserBackend().scan`), from the browser, over live GitHub;
+  the same URLs, `/tree/<ref>` and `github.com/<owner>` included
+- **GitHub token**: a password field under the link, optional. The next scan sends it to GitHub,
+  as the CLI sends `GITHUB_TOKEN`: a higher rate limit, and code search. It lives in the page's
+  memory: *not* in the address, *not* stored, gone on reload. Empty → a scan without a token
 - A scan charts its repository's world, and the view goes to it
+- **Filter**: a field above the skills, once a scan has found some. As the CLI's `--filter`, while
+  typing: only the matching skills are listed, the count reads `M of N skills`; the chosen skill
+  stays if it matches, else the first match is chosen; no match → `No skill matches “<words>”`,
+  nothing chosen. On the world, only the places of the skills listed are named. A new scan clears it
+- **Organization**: every repository of it that has skills is charted, each a world; the view stays
+  over the system, with `<owner>`, linked, and `N skills in R repositories`; the skills under their
+  repository's `owner/repo`, linked at its scanned commit; the first skill of the first repository
+  is chosen, and the world of the chosen skill is marked. The filter spans every repository; one
+  without a match is not listed
 - The repository: `owner/repo` linked at the scanned commit, and `N skills`
 - The skills: sorted by **name**, each with its description's *first sentence* and its path
 - The first skill is chosen; clicking another chooses it; in the index, `↓` and `↑` choose the next
@@ -21,6 +34,10 @@ site in `web/dist`.
 - Warnings: under the repository, as notes; however many, the index keeps its room
 - An unreachable repository, an unknown ref, a non-GitHub link → the CLI's message, as an alert;
   the view stays over the system
+- The token's messages name the field, not the CLI's `GITHUB_TOKEN`: a token GitHub rejects →
+  `GitHub rejected the token in the GitHub token field`; past the rate limit without a token →
+  `GitHub rate limit reached; fill in the GitHub token field`; a tree too large to list without
+  a token → the warning ends `(the GitHub token field searches everywhere)`
 - No `SKILL.md` → `0 skills`, nothing to choose
 - Examples, under the field until a world is in view: `anthropics/skills`, `obra/superpowers`,
   `vercel-labs/agent-skills`, `openai/codex`, `huggingface/skills`, `trailofbits/skills`,
@@ -48,7 +65,8 @@ site in `web/dist`.
   are copied into (`.github/skills` beside `.claude/skills`)
 - The register: the charted worlds by name, each with `N skills` and the world nearest to it,
   `N% alike`. Clicking an entry goes to its world; pointing at an entry marks its world, and
-  pointing at a world marks its entry
+  pointing at a world marks its entry. Over it, the organizations that were scanned, each with
+  `N skills in R repositories`: a click, and its skills are read again
 - A thread from each world to the one most like it, with how alike they are, in percent, half way
   along; the world pointed at is ringed in red, and has a thread to every other
 - Clicking a world goes to it; one not yet charted is scanned first

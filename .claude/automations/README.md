@@ -12,7 +12,7 @@ issue opened ──▶ Issue start ──▶ pull request
                                      ▲               │ "<!-- air-code-review head=… verdict=… -->"
                  new commits         │               ▼
                  (pushed at the  ────┘      work after code review
-                  end of the run)            ├─ not-ready → fix commits, at most 3 rounds
+                  end of the run)            ├─ not-ready → fix commits, round after round
                                              └─ ready     → merge gates → merge
 ```
 
@@ -48,9 +48,14 @@ Each rule below closes a hole that was open, or a loop that ran, before.
 5. **Every step is safe to run twice.** Air may deliver an event twice, and `opened` and
    `synchronize` can both fire. One review per head (checked right before posting); one fix round
    per reviewed head (a claim comment, lowest id wins); one PR per issue.
-6. **The loop ends.** A fix round with no commit pushes nothing, so no review follows. Three fix
-   rounds on one PR and the fourth is refused. A re-review may not raise new nits on code the
-   earlier review saw. Each of these ends with a comment that says a person is needed.
+6. **The loop runs until the review says ready.** There is no limit on fix rounds: every
+   `not-ready` review of the current head gets one, and every push gets a review. Before, the
+   fourth round was refused, and findings in `.claude/` or `AGENTS.md` were always declined, so
+   PRs stopped half-fixed and waited for a person. Two things still end it: a fix round with no
+   commit (everything declined: a product decision, a workflow or a dependency) pushes nothing,
+   so no review follows, and its comment says a person is needed; and a re-review may not raise
+   new nits on code the earlier review saw, so the rounds converge. Nothing else stops it:
+   **to stop a PR's loop, mark it as a draft**, or pause "work after code review".
 7. **Merging is gated, and atomic.** Only on `verdict=ready` for the current head, base `main`,
    not stacked, no person's "changes requested", mergeable, CI green on that head; then
    `gh pr merge --merge --match-head-commit <sha>`, which GitHub refuses if anything was pushed
@@ -61,6 +66,16 @@ Each rule below closes a hole that was open, or a loop that ran, before.
    a skill, or changes the marker line, is not handled by the new rules: **a person merges it.**
 9. **Nobody builds on an unmerged branch.** A PR stacked on another carries that one's commits
    into `main` under its own review.
+
+## Demos
+
+Every pull request that changes what a user sees shows it in a `## Demo` section of its
+description: a short GIF of the web view, or the real CLI output
+([`pr-demo`](../skills/pr-demo/SKILL.md)). Issue start records it before it opens the PR; the fix
+automation records it again when its fixes change what is shown, and adds it before a merge when
+it is missing. The media sits on a `demo/<branch>` side branch, which has no workflow file and
+which no automation listens to. A missing demo is never a review finding and never stops a
+merge, so it cannot add a round to the loop.
 
 ## What the platform does (checked on 2026-11-26)
 

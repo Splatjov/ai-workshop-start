@@ -91,6 +91,11 @@ test('rate limit → a message that asks for GITHUB_TOKEN', async () => {
   await assert.rejects(openGitHub('https://github.com/JetBrains/MPS', { fetch: limited }), {
     message: 'GitHub rate limit reached; set GITHUB_TOKEN',
   });
+  // A token GitHub rejects: the CLI names where it came from.
+  const rejected = replay({ 'https://api.github.com/repos/JetBrains/MPS': { status: 401, body: { message: 'Bad credentials' } } });
+  await assert.rejects(openGitHub('https://github.com/JetBrains/MPS', { fetch: rejected, token: 'wrong' }), {
+    message: 'GitHub rejected the token in GITHUB_TOKEN',
+  });
 });
 
 test('a /tree/<ref> URL scans that commit, through its tree even with a token', async () => {

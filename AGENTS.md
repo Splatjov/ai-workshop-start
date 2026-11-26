@@ -7,6 +7,9 @@ Integration tests for every case in the spec.
 - All tests pass locally
 - The CI build is green
 
+## Pull requests
+A mini demo of what changes, in the description: [pr-demo](.claude/skills/pr-demo/SKILL.md).
+
 ## Commands
 - `npm ci`: first, in a fresh checkout
 - `npm test`: the tests
