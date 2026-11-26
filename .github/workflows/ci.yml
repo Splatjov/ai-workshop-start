@@ -26,6 +26,9 @@ jobs:
       - run: npm run test:e2e
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The web view, built and clicked through in Chromium, GitHub answered from recordings.
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:web
       # The real CLI on the fixture repository, as a user would run it: it must exit 0.
       - name: Smoke test
         run: |
