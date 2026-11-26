@@ -1,5 +1,6 @@
 // spec/web.md: the page, as a user sees it, over recorded GitHub answers.
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { answer as text } from '../../src/core/replay.ts';
 import { BROKEN_MD, COMMIT, COMMITS_MD, GAMMA_COMMIT, GRADLE_MD, RECORDING, STYLE_MD } from './recording.ts';
 
 const blob = `https://github.com/JetBrains/atlas-demo/blob/${COMMIT}`;
@@ -35,7 +36,7 @@ test.beforeEach(async ({ page, context }) => {
     if (!answer) return route.abort('internetdisconnected');
     await route.fulfill({
       status: answer.status,
-      body: typeof answer.body === 'string' ? answer.body : JSON.stringify(answer.body),
+      body: text(answer, route.request().postData() ?? ''),
       headers: { 'access-control-allow-origin': '*' },
     });
     answered.push(url);
@@ -332,15 +333,17 @@ test('organization: its skills under their repositories, the first one chosen; t
   await expect(chosen(page).getByLabel('SKILL.md')).toHaveText(GRADLE_MD);
 });
 
-test('organization, with a token: one code search and the repository list; unknown → the CLI’s message, as an alert', async ({ page }) => {
+test('organization, with a token: one code search, one request for the repositories’ skill places; unknown → the CLI’s message, as an alert', async ({ page }) => {
   await page.goto('./');
   await page.getByLabel('GitHub token').fill('secret-token');
   await scan(page, 'github.com/atlas-org');
   await expect(page.getByRole('heading', { level: 2 })).toHaveText('atlas-org 4 skills in 2 repositories');
   expect(requests).toContain('https://api.github.com/search/code?q=filename:SKILL.md+user:atlas-org&per_page=100&page=1');
-  // The repositories the search does not answer for are read through their trees.
+  expect(requests.filter((url) => url === 'https://api.github.com/graphql')).toHaveLength(1); // the five repositories, in one request
+  // A tree is read only where skills may be: beta, without any, costs no request of its own.
   expect(requests).toContain('https://api.github.com/users/atlas-org/repos?per_page=100&page=1');
-  expect(requests).toContain(`https://api.github.com/repos/atlas-org/beta/git/trees/${COMMIT}?recursive=1`);
+  expect(requests).toContain(`https://api.github.com/repos/atlas-org/alpha/git/trees/${COMMIT}?recursive=1`);
+  expect(requests.some((url) => url.includes('/repos/atlas-org/beta/'))).toBe(false);
   expect(authorizations.every((header) => header === 'Bearer secret-token')).toBe(true);
 
   await scan(page, 'https://github.com/no-such-org');
