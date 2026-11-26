@@ -291,6 +291,22 @@ test('organization, with a token, past its limits → the message says when to t
   });
 });
 
+test('organization, with a token: a tree listed whole → a file only code search still lists is not read, and no warning', async () => {
+  // The search's index is behind the branch: old/SKILL.md was deleted before the scanned commit.
+  const url = 'https://api.github.com/search/code?q=filename:SKILL.md+user:atlas-org&per_page=100&page=1';
+  const found = RECORDING[url].body as { total_count: number; items: object[] };
+  const { fetch, requests } = github({
+    ...RECORDING,
+    [url]: { status: 200, body: { total_count: found.total_count + 1, items: [...found.items, { path: 'old/SKILL.md', repository: { full_name: 'atlas-org/alpha' } }] } },
+    [`https://raw.githubusercontent.com/atlas-org/alpha/${COMMIT}/old/SKILL.md`]: { status: 404, body: '404: Not Found' },
+  });
+  const result = await atlas(['scan', 'https://github.com/atlas-org'], { fetch, token: 'secret' });
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stdout, ORGANIZATION);
+  assert.match(result.stderr, WARNING); // gamma's, and no other
+  assert.ok(!requests.some((request) => request.url.includes('old/SKILL.md')));
+});
+
 test('organization: the pages of the repository list are asked for together, and beyond the count the owner gives', async () => {
   const repositories = Array.from({ length: 201 }, (_, index) => ({
     full_name: `many/r${index}`,

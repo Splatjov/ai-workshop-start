@@ -24,8 +24,9 @@ what is shown differs
     request for every 25 repositories* (GraphQL) that says each one's commit and whether a usual
     skill place is at its top: `SKILL.md`, `skills`, `.agents/skills`, `.claude/skills`,
     `.github/skills`, `agent/skills`. Only a repository that the search answers for, or that
-    has such a place, is read, whole, through its tree: one request. A repository without
-    skills costs none of its own. `getsentry`, 637 repositories: some 100 requests, not 1200
+    has such a place, is read, whole, through its tree: one request. A tree listed whole is
+    what is scanned: a file only the search still lists (its index is behind the branch) is not
+    read, and gives no warning. A repository without skills costs none of its own. `getsentry`, 637 repositories: some 100 requests, not 1200
   - With a token, *not found*: skills only outside the usual places, in a repository code
     search does not answer for (archived, long inactive, at times an active one). Speed is
     chosen over these; without a token they are found
