@@ -153,9 +153,12 @@ export function chartOf(view: Scanned): Chart {
 
 /** Pushes stars closer than `apart` away from each other, and keeps each within reach of its centre. */
 function spread(at: Vec3[], of: number[], centres: Vec3[], reach: number[], apart: number) {
-  for (let pass = 0; pass < 90; pass++) {
+  const near = Math.cos(apart * 1.9); // most pairs are further apart than any wanted gap: a product tells
+  const passes = clamp(Math.round(36000 / Math.max(1, at.length)), 12, 90); // a huge sky settles for less
+  for (let pass = 0; pass < passes; pass++) {
     for (let i = 0; i < at.length; i++) {
       for (let j = i + 1; j < at.length; j++) {
+        if (dot(at[i], at[j]) < near) continue;
         const wanted = of[i] === of[j] ? apart : apart * 1.9;
         const gap = angle(at[i], at[j]);
         if (gap >= wanted) continue;

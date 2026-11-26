@@ -506,8 +506,8 @@ h1 .spark {
 
 /* On the cover it is a pencil note, at the globe's lower left. */
 .plate[data-view='cover'] .hint {
-  left: 3%;
-  bottom: 15%;
+  left: -5%;
+  bottom: 7%;
   transform: rotate(-5deg);
 }
 

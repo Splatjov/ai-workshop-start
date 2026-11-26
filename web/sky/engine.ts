@@ -438,6 +438,14 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
   const wakePen = pen({ accent: true, width: 1.3, alpha: 0, sphere: true, back: 0.3, taper: 0.3, wobble: 0.012, dry: 0.8 });
   drawn(new Strokes(hand).line(half(0.09)).line(half(0.2)).line(half(0.34)), wakePen, sweep, 7);
 
+  // Now and then a star falls: a quick stroke across the glass, gone as soon as it is drawn.
+  const falling = new Group();
+  globe.add(falling);
+  const fallPen = pen({ width: 1.7, alpha: 0, sphere: true, back: 0.25, taper: 0.3, wobble: 0.004, dry: 0.3, fade: true });
+  fallPen.uniforms.uReveal.value = 0;
+  drawn(new Strokes(hand).line(ring(1, 0, 40)(0, 0.62)), fallPen, falling, 6);
+  let nextFall = 6;
+
   // The rings a pen draws around a star: the chosen one in red pencil, the one under the pointer in ink.
   const lasso = (material: ShaderMaterial) => {
     const mesh = drawn(new Strokes(hand).loop(disc(1, 0, 48), 0, 2), material, scene, 8);
@@ -511,6 +519,8 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
   let lostFor = 9;
   let aimed = 0;
   let turnedOnce = false;
+  /** How much larger than its place the globe is, for a moment, as a star is chosen. */
+  let swell = 0;
 
   const tweens = new Map<string, Tween>();
   function tween(key: string, duration: number, apply: (t: number) => void, delay = 0) {
@@ -532,8 +542,8 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
   function see(at: Vector3) {
     v.copy(at).applyQuaternion(globe.quaternion);
     seen.near = EYE / (EYE - v.z);
-    seen.x = centre.x - window.scrollX + v.x * radius * RIM * seen.near;
-    seen.y = centre.y - window.scrollY - v.y * radius * RIM * seen.near;
+    seen.x = centre.x - window.scrollX + v.x * radius * (1 + swell) * RIM * seen.near;
+    seen.y = centre.y - window.scrollY - v.y * radius * (1 + swell) * RIM * seen.near;
     seen.facing = v.z - 1 / EYE;
     return seen;
   }
@@ -633,6 +643,7 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
     chosenRing.visible = chosen >= 0;
     if (chosen < 0) return;
     tween('chosen', 0.5, (t) => (chosenPen.uniforms.uReveal.value = t), 0.05);
+    tween('swell', 0.9, (t) => (swell = Math.sin(t * Math.PI) * 0.035));
     // The shortest turn that brings the star to rest in front.
     v.copy(stars[chosen].at).applyQuaternion(turn);
     const to = new Quaternion().setFromUnitVectors(v, REST).multiply(turn);
@@ -814,6 +825,7 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
     const x = rect.left + rect.width / 2 + window.scrollX;
     const y = rect.top + rect.height / 2 + window.scrollY;
     const r = Math.max(24, Math.min(rect.width, rect.height) * 0.5 * FIT);
+    const grown = 1 + swell;
     if (!placed || still) {
       centre.set(x, y);
       radius = r;
@@ -828,7 +840,7 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
     const cx = centre.x - window.scrollX;
     const cy = centre.y - window.scrollY;
     const near = 0.1;
-    const k = near / (EYE * radius * RIM);
+    const k = near / (EYE * radius * grown * RIM);
     camera.projectionMatrix.makePerspective(-cx * k, (width - cx) * k, cy * k, -(height - cy) * k, near, 40);
     camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
     const ratio = shared.uPx.value;
@@ -874,21 +886,27 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
     q.setFromAxisAngle(Z, shake).premultiply(lean);
 
     globe.quaternion.copy(q).multiply(turn);
+    // The rings turn in their own planes, and rock a little. A scan sets them tumbling; when it is
+    // over they come to rest as they were drawn.
+    let rock = 0;
     if (!still) {
       innerTurn += dt * (0.06 + 2.8 * scan);
       outerTurn -= dt * (0.04 + 2.1 * scan);
-      tumble += dt * (0.012 + 1.3 * scan);
+      if (scan > 0.03) tumble += dt * 1.5 * scan;
+      else tumble += (Math.round(tumble / TURN) * TURN - tumble) * (1 - Math.exp(-dt * 2.4));
+      rock = Math.sin(time * 0.19) * 0.09;
     }
-    inner.quaternion.copy(q).multiply(innerTilt).multiply(new Quaternion().setFromAxisAngle(X, tumble)).multiply(new Quaternion().setFromAxisAngle(Y, innerTurn));
-    outer.quaternion.copy(q).multiply(outerTilt).multiply(new Quaternion().setFromAxisAngle(Z, -tumble * 0.7)).multiply(new Quaternion().setFromAxisAngle(Y, outerTurn));
+    inner.quaternion.copy(q).multiply(innerTilt).multiply(new Quaternion().setFromAxisAngle(X, tumble + rock)).multiply(new Quaternion().setFromAxisAngle(Y, innerTurn));
+    outer.quaternion.copy(q).multiply(outerTilt).multiply(new Quaternion().setFromAxisAngle(Z, -tumble - rock * 0.7)).multiply(new Quaternion().setFromAxisAngle(Y, outerTurn));
   }
 
-  function lasso3(mesh: Mesh, material: ShaderMaterial, star: number, reach: number, alpha: number) {
+  /** Puts a pen's ring round a star, wherever the star is now: larger than it by `reach` pixels. */
+  function encircle(mesh: Mesh, material: ShaderMaterial, star: number, reach: number, alpha: number) {
     if (!stars[star]) return;
     const at = see(stars[star].at);
     mesh.position.copy(v);
     const size = stars[star].size * skillPen.uniforms.uScale.value * 1.2 + reach;
-    mesh.scale.setScalar(size / (radius * RIM * at.near));
+    mesh.scale.setScalar(size / (radius * (1 + swell) * RIM * at.near));
     material.uniforms.uAlpha.value = alpha * (0.35 + 0.65 * smooth(-0.08, 0.1, at.facing));
   }
 
@@ -1017,9 +1035,18 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
     const dimmed = lostOn ? 0.45 : 1;
     fieldPen.uniforms.uAlpha.value += (dimmed - fieldPen.uniforms.uAlpha.value) * Math.min(1, dt * 6);
 
+    if (!still && !lostOn && time > nextFall) {
+      nextFall = time + 8 + Math.random() * 9;
+      falling.quaternion.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
+      tween('fall', 1.25, (t) => {
+        fallPen.uniforms.uReveal.value = Math.min(1, t * 1.6);
+        fallPen.uniforms.uAlpha.value = 0.9 * (1 - smooth(0.55, 1, t));
+      });
+    }
+
     rotate(dt);
-    if (chosen >= 0) lasso3(chosenRing, chosenPen, chosen, 11, 1);
-    if (pointedRing.visible) lasso3(pointedRing, pointedPen, pointed, 8, 0.85);
+    if (chosen >= 0) encircle(chosenRing, chosenPen, chosen, 11, 1);
+    if (pointedRing.visible) encircle(pointedRing, pointedPen, pointed, 8, 0.85);
     label();
     trace();
 
