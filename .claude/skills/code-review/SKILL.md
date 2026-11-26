@@ -15,7 +15,10 @@ If something is ambiguous, pick the most reasonable interpretation and say so in
 From `$ARGUMENTS` (or, in an automation, from the triggering PR event):
 - a number → that PR: `gh pr view <n> --json number,title,body,baseRefName,headRefName,headRefOid,url`,
   then `gh pr diff <n>`. To run things, you need its head locally: if `git rev-parse HEAD` already
-  equals `headRefOid`, stay where you are; otherwise `gh pr checkout <n>`
+  equals `headRefOid`, stay where you are; otherwise `gh pr checkout <n>` (or, already on its
+  branch, `git fetch origin <head> && git merge --ff-only origin/<head>`). The triggering event's
+  sha is often stale: the author, or another run of this automation, pushed while this one started.
+  Review `headRefOid`, and name its short sha in the report
 - a branch name → `git diff origin/main...<branch>`
 - nothing → if the current branch has an open PR (`gh pr view --json number`), review that PR;
   otherwise `git diff origin/main...HEAD` plus uncommitted changes (`git diff HEAD`)
@@ -63,13 +66,16 @@ npm test
 - `npm run test:e2e` — when the change touches `src/core/github.ts`, fetching, URL/ref handling or
   `tests/e2e/`, and the network is available. Set `GITHUB_TOKEN` (`gh auth token`) if you can.
 - `npm run test:web` — when the change touches `web/`, `src/browser.ts`, `src/core`, `tests/web/`
-  or `playwright.config.ts`. Needs `npx playwright install --with-deps chromium` first.
+  or `playwright.config.ts`. Needs `npx playwright install --with-deps chromium` first; if apt
+  fails with a 404 (a stale package index), `sudo apt-get update` and install again.
 
 A check you did not run is reported as `skipped (why)`, never as passing.
 Any failing command is a finding: quote the relevant output.
 
 For a PR, also check CI: `gh pr checks <n>` (exit code 8 just means "some pending"). A push to a PR
-branch usually starts two runs (`push` and `pull_request`); both count. On a fresh push they are
+branch usually starts two runs (`push` and `pull_request`); both count. Judge only the runs of the
+reviewed head (`gh run list --branch <head> --commit <sha>`): `cancelled` runs of older commits
+were superseded by the workflow's `concurrency: cancel-in-progress`, they are not failures. On a fresh push they are
 often still pending — check again at the end of the review. Still pending is a note in the
 report, with the run links.
 
@@ -100,7 +106,9 @@ In this order of importance:
      repository (with `GITHUB_TOKEN`), and say which ones you checked and what they returned.
      Without a token GitHub allows 60 API requests an hour per IP (~20 scans), shared with
      everything else on the runner: `GitHub rate limit reached` then is the environment, not the
-     change. Rerun with the token before reporting anything.
+     change. Rerun with the token before reporting anything. *With* a token, `try again in a
+     minute` is usually GitHub's secondary (burst) limit: wait a minute, retry once; still failing →
+     say the fact is unverified, it is not a finding.
    - A bug in old code that the change **newly makes reachable** (e.g. a race in `scan()` that was
      guarded by the disabled button, now reachable through a new link) is the change's finding:
      anchor it at the new code, not the old.
@@ -279,7 +287,17 @@ With `--comment` and a PR target:
 - Never approve or request changes, never merge, never close.
 - Before posting, check existing comments (`gh api repos/{owner}/{repo}/pulls/<n>/comments` and
   `gh pr view <n> --json comments`) and skip findings already reported, so reruns of the automation
-  don't duplicate them.
+  don't duplicate them. Several runs can review the same PR at once (one per push): check again
+  right before posting, and re-read `headRefOid`.
+  - A report for the same head already there → don't post another; at most fix it in place
+    (`gh api -X PATCH repos/{owner}/{repo}/issues/comments/<id> -F body=@<report.md>`).
+  - A report for an older head, and since then only `.claude/` or docs changed → a short comment
+    instead of a second full report: the new sha, that the product code is unchanged since
+    `<old sha>` (`git diff --stat <old>..<new>`) so that review stands, CI on the new sha, and only
+    what is new (e.g. a finding about the skill itself).
+  - Otherwise a new report, naming the earlier findings that are now fixed.
+- Changing this skill in the same run (when asked to): fetch the branch and fast-forward first,
+  since another run may have pushed its own edits; add to them, don't redo them.
 
 When `$AIR_ARTIFACTS_DIR` is set (an automation), always write the report to
 `$AIR_ARTIFACTS_DIR/code-review.md` too, so it survives the run.
