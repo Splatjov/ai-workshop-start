@@ -15,3 +15,7 @@ A mini demo of what changes, in the description: [pr-demo](.claude/skills/pr-dem
 - `npm test`: the tests
 - `npm run test:e2e`: end-to-end, on real GitHub repositories (network)
 - `npm run typecheck`: the types, as CI checks them
+- `npm run test:web`: the web view in Chromium, a video of each test in `test-results/`
+- `npm run test:screenshots`: the same, in CI's Playwright container, with the screenshot
+  comparisons; `-- --update-snapshots` when a change is meant to look different (see
+  [spec/web.md](spec/web.md), "Recordings and screenshots")

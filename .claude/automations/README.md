@@ -77,6 +77,25 @@ it is missing. The media sits on a `demo/<branch>` side branch, which has no wor
 which no automation listens to. A missing demo is never a review finding and never stops a
 merge, so it cannot add a round to the loop.
 
+## Manual QA
+
+A fourth automation, **Manual QA**, follows the standard test scripts in [qa/](../../qa/README.md)
+with the [`manual-qa`](../skills/manual-qa/SKILL.md) skill: each script in Chromium against live
+GitHub, a video of each, a report of pass or fail with the step and the second in the video. The
+evidence goes to the `qa/runs` side branch; each failing script gets one issue.
+
+**Not created in Air yet.** To create it: in the same environment, a new automation whose
+instructions are [manual-qa.prompt.md](manual-qa.prompt.md), on `main`, output `read-only`; no
+event trigger (**Run Now** before a release, or a schedule if you want one). Run it once, watch the
+videos, polish the skill until you like the report; then add it to `triggers.json` with its id.
+
+- `read-only`, as the reviewer: it tests `main`, it never changes it. The evidence branch and the
+  issues are written with the token, which `read-only` does not restrict, so the prompt says so.
+- Its issues are opened by `jetbrains-air[bot]`, so they do not start Issue start, which only
+  takes `Splatjov`'s: a person reads the failure and decides whether to delegate it.
+- The scripts are the source of truth: the automation follows them and never edits them; a step
+  that looks wrong is a "Script notes" line in its run summary.
+
 ## What the platform does (checked on 2026-11-26)
 
 - The agent posts to GitHub as `jetbrains-air[bot]`, with a GitHub App token that can write pull

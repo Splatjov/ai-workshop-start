@@ -22,7 +22,10 @@ A `/tree/<commit>` URL scans that commit: `./skill-atlas scan https://github.com
 
 In the browser: `npm run web` opens a hand-drawn page with a field for the repository or organization link, a token field, a filter, the
 skills and each one's `SKILL.md`, with nine example repositories one click away; `npm run test:web`
-clicks through it in Chromium.
+clicks through it in Chromium and records a video of each test; `npm run test:screenshots` does it
+in CI's Playwright container and compares the screenshots with the baselines.
 
+- [qa/](qa/README.md): the standard manual test scripts, which the
+  [`manual-qa`](.claude/skills/manual-qa/SKILL.md) skill follows in a browser, recorded.
 - [spec/](spec/): what it does. [AGENTS.md](AGENTS.md): the definition of done.
 - [fixture/](fixture/README.md): a small repository for the tests.

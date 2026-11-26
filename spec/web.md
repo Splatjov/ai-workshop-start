@@ -35,7 +35,28 @@ controls and [@sketchyicons/react](https://www.npmjs.com/package/@sketchyicons/r
 - A scan started while another runs wins: only the latest scan's result is shown
 - `?repo=<URL>` in the page's address scans at once; scanning writes it there, so a scan can be
   shared or reloaded. *Nothing is stored*
+## Recordings and screenshots
+- **The demo as a test**: `tests/web/walkthrough.spec.ts` walks the page as a user would (open,
+  scan a repository, choose a skill, filter, a filter without a match; an organization, its
+  filter, a link that cannot be scanned) and after each step checks what the user should see
+- **A video of every run**: every test of `npm run test:web` records one into `test-results/`;
+  CI keeps them, with the HTML report, as the `web-recordings` artifact, passed or failed
+- **Screenshots at the key moments** (`start`, `repository`, `skill`, `filter`, `no-match`,
+  `organization`, `error`): the whole page, compared pixel by pixel with its reviewed baseline in
+  `tests/web/__screenshots__/`. One pixel off fails the check; CI keeps its expected, actual and
+  diff images, side by side in the HTML report
+- **The same pixels on every run**: the recorded GitHub answers, a 1280×800 viewport at scale 1,
+  reduced motion and no animations or caret, drawably's sketches from a fixed seed, and the fonts
+  of the Playwright container (`mcr.microsoft.com/playwright:v<@playwright/test>-noble`)
+- The screenshots are compared only in that container: on CI, and with `npm run
+  test:screenshots` (Docker, or Podman), which sets `SCREENSHOTS=1`. Elsewhere `npm run test:web`
+  skips the comparisons and keeps the behaviour checks
+- **A change that is meant to look different** updates the baselines in the same PR, with
+  `npm run test:screenshots -- --update-snapshots`; a new baseline is a reviewed decision, never
+  the first answer to a red CI
 ## Tests
 - `tests/web.test.ts`: the browser backend's `scan`, on recorded GitHub answers
 - `tests/web/*.spec.ts`, `npm run test:web`: the built page in Chromium, GitHub answered from
   recordings
+- `tests/screenshots.test.ts`: CI, the npm script and the installed Playwright name the same
+  container; CI keeps the recordings; every screenshot has its baseline

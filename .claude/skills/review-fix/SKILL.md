@@ -178,6 +178,19 @@ npx playwright install --with-deps chromium && npm run test:web   # when web/, s
 GITHUB_TOKEN=$(gh auth token) npm run test:e2e                     # when src/core/github.ts, fetching or tests/e2e/ changed
 ```
 
+**Screenshots** (spec/web.md, "Recordings and screenshots"): CI compares the walkthrough's
+screenshots with `tests/web/__screenshots__/`, in the Playwright container. Run them the same way
+when `web/` or `tests/web/` changed: `npm run test:screenshots` (Docker or Podman; `sudo` is fine).
+- One differs → look at its `test-results/**/<name>-diff.png` first. Not what the change is for
+  (a shifted header, a lost word) → a regression: fix the code, never the baseline.
+- Meant to look different → `npm run test:screenshots -- --update-snapshots`, look at every new
+  baseline, and commit them with the change that causes them; the PR's tests section names each one.
+- No container engine, or CI on this head is red only because a screenshot differs as the PR
+  intends → take CI's images: `gh run download <run-id> -n web-recordings -D /tmp/ci`, look at
+  each `*-actual.png` and its diff, copy it over its baseline, and commit that. Without an engine,
+  a change that will alter a screenshot is committed as is; the next round takes CI's images.
+  Never update a baseline you have not looked at.
+
 All of it must pass. A check you cannot make pass → undo that finding's change and decline it
 ("the fix broke `<check>`: `<failing line>`"). Never commit a red tree.
 
