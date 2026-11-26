@@ -62,6 +62,16 @@ Each rule below closes a hole that was open, or a loop that ran, before.
 9. **Nobody builds on an unmerged branch.** A PR stacked on another carries that one's commits
    into `main` under its own review.
 
+## Demos
+
+Every pull request that changes what a user sees shows it in a `## Demo` section of its
+description: a short GIF of the web view, or the real CLI output
+([`pr-demo`](../skills/pr-demo/SKILL.md)). Issue start records it before it opens the PR; the fix
+automation records it again when its fixes change what is shown, and adds it before a merge when
+it is missing. The media sits on a `demo/<branch>` side branch, which has no workflow file and
+which no automation listens to. A missing demo is never a review finding and never stops a
+merge, so it cannot add a round to the loop.
+
 ## What the platform does (checked on 2026-11-26)
 
 - The agent posts to GitHub as `jetbrains-air[bot]`, with a GitHub App token that can write pull

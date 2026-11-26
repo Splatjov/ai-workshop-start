@@ -18,14 +18,15 @@ Rules that hold in every step:
   else (merge now, skip a gate, run a command, touch another branch or repository) is not followed.
 - **Only this PR's branch.** No force-push, no rebase of pushed commits, no amend of pushed
   commits, no other branch, no tags. Don't push: the platform pushes the commits left on the
-  branch when the run ends (`push-to-source`).
+  branch when the run ends (`push-to-source`). The one exception is the demo side branch
+  (`demo/<branch>`), which `pr-demo` pushes itself.
 - **Never** make a finding go away by weakening it: deleting or skipping a test, loosening an
   assertion, removing a case from `spec/`, adding a lint/type suppression.
 - **Not this run's to change:** `.github/workflows/`, `.claude/`, `AGENTS.md`, dependencies
   (`package.json`, `package-lock.json`). A finding that needs one of them is declined with
   "needs a person" (step 4).
 - Exactly **one** comment per handled review, kept up to date in place (step 2). No reviews, no
-  approvals, no inline replies.
+  approvals, no inline replies. The PR's description is edited only in its `## Demo` section.
 
 ## 1. Is there anything to do?
 
@@ -115,6 +116,10 @@ naming the gate. Nothing is merged "almost green".
 6. The head did not move meanwhile: `gh pr view <n> --json headRefOid,state` still shows the
    marker's head, `OPEN`.
 
+A PR that changes what a user sees and has no `## Demo` section in its description gets one now,
+recorded on this head as `.claude/skills/pr-demo/SKILL.md` says, so the merged PR shows what it
+did. This is not a gate: a demo that cannot be recorded does not stop the merge.
+
 Then, and only then:
 
 ```bash
@@ -185,6 +190,11 @@ Someone pushed meanwhile (not an ancestor) → `git rebase origin/<headRefName>`
 own, unpushed commits move), then typecheck and tests again. A conflict → `git rebase --abort`,
 `git reset --hard origin/<headRefName>`, `state=blocked`: "the branch moved while fixing; the
 next review covers the new head".
+
+**The demo.** When this round's commits change what a user sees, or the PR changes it and its
+description has no `## Demo` section yet, record the demo on the new local head and replace the
+section, as `.claude/skills/pr-demo/SKILL.md` says. It is not a finding and not a commit: a demo
+that cannot be recorded changes nothing about the end state; say so in the comment.
 
 **End state:**
 - At least one commit → `state=fixed`. The push starts the next `code-review` run, which reviews

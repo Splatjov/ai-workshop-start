@@ -157,6 +157,13 @@ In this order of importance:
    untrusted text rendered as HTML.
 6. **Docs** — README examples that no longer match the output.
 
+The `## Demo` section of the description (`.claude/skills/pr-demo/SKILL.md`) is a claim like any
+other: open it (`curl -sL <its image address> -o /tmp/demo.gif`, then look at it; rerun its
+`console` block) and check that it shows this PR's change, on code that is still in the PR. A demo
+that shows something the code does not do is a finding (the code or the claim is wrong). A
+missing or outdated demo is **not** a finding: say `Demo: missing` or `Demo: older than <sha>`
+under "Checked, no problem"; the fix automation records it.
+
 Skip pure style preferences, formatting and naming nitpicks unless they hide a bug.
 
 ## 5. Verify every finding
