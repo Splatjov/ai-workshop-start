@@ -24,7 +24,7 @@ export type OrganizationView = { organization: Organization; repositories: Repos
 export type ScanView = RepositoryView | OrganizationView | { error: string };
 
 export type ScanOptions = {
-  /** A GitHub token: a higher rate limit, and code search. It goes to GitHub only. */
+  /** A GitHub token: a higher rate limit. It goes to GitHub only. */
   token?: string;
 };
 
@@ -32,13 +32,14 @@ export type ScanOptions = {
 const TOKEN_FIELD: TokenSource = {
   name: 'the GitHub token field',
   set: 'fill in the GitHub token field',
-  search: 'the GitHub token field searches everywhere',
+  // A page cannot read code search's answers: GitHub sends them without CORS headers.
+  search: 'the CLI with GITHUB_TOKEN searches everywhere',
 };
 
 export function createBrowserBackend(options: BrowserOptions = {}) {
   const live = options.fetch ?? ((url, init) => fetch(url, init));
   const open = (input: string, token?: string) =>
-    openGitHub(input, { fetch: live, token: token?.trim() || undefined, tokenSource: TOKEN_FIELD });
+    openGitHub(input, { fetch: live, token: token?.trim() || undefined, tokenSource: TOKEN_FIELD, codeSearch: false });
 
   /** The scan, with each skill's link and the SKILL.md text the scan read. */
   async function view(opened: Source): Promise<RepositoryView> {

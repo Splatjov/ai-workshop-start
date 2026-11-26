@@ -14,11 +14,16 @@ export type GitHubOptions = {
   token?: string;
   /** Where the user gives the token, as the messages name it; the CLI's `GITHUB_TOKEN` by default. */
   tokenSource?: TokenSource;
+  /**
+   * False: never code search, even with a token; trees and GraphQL only. For a browser: GitHub's
+   * code search answers without CORS headers, so a page cannot read it.
+   */
+  codeSearch?: boolean;
 };
 
 /**
  * `name`: "GitHub rejected the token in <name>"; `set`: "GitHub rate limit reached; <set>";
- * `search`: the hint of the warning for a tree too large to list without a token.
+ * `search`: the hint of the warning for a tree too large to list without code search.
  */
 export type TokenSource = { name: string; set: string; search: string };
 
@@ -66,15 +71,19 @@ async function openRepository(github: Client, info: RepositoryInfo, ref: string 
   );
   const warnings: string[] = [];
   // Code search sees only the default branch: another ref is listed through its tree.
-  const search = Boolean(options.token) && !ref && covered;
+  const searching = canSearch(options);
+  const search = searching && !ref && covered;
   const hint = ref
     ? 'code search sees only the default branch'
-    : options.token
+    : searching
       ? 'code search does not cover this repository'
       : (options.tokenSource ?? ENVIRONMENT).search;
   const paths = search ? await searchPaths(github, id) : (await treePaths(github, id, sha, warnings, hint)).paths;
   return source(github, id, sha, paths, warnings);
 }
+
+/** Code search needs a token, and a client that can read its answers. */
+const canSearch = (options: GitHubOptions) => Boolean(options.token) && options.codeSearch !== false;
 
 function source(github: Client, id: string, sha: string, paths: string[], warnings: string[]): Source {
   const [organization, repo] = id.split('/');
@@ -91,7 +100,7 @@ const AT_ONCE = 8;
 
 /**
  * Every repository of an organization, or of a user, at its default branch. Forks are not
- * scanned. Without a token, each one's tree. With one, only the trees of the repositories that
+ * scanned. Without code search, each one's tree. With it, only the trees of the repositories that
  * may have skills: those code search answers for, and those with a skill folder at a usual place.
  */
 async function openOrganization(github: Client, owner: string, options: GitHubOptions): Promise<OrganizationSource> {
@@ -101,7 +110,8 @@ async function openOrganization(github: Client, owner: string, options: GitHubOp
   );
   const warnings: string[] = [];
   const listed = (await listOrganization(github, login, public_repos ?? 0)).filter((repository) => !repository.fork);
-  const repositories = options.token
+  // Without code search a token only raises the limit: every tree, as without one.
+  const repositories = canSearch(options)
     ? await openCandidates(github, login, listed, warnings)
     : await pooled(listed, AT_ONCE, (info) => openListed(github, info, options));
   return {
