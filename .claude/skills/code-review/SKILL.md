@@ -100,6 +100,15 @@ npm test
   or `playwright.config.ts`. Needs `npx playwright install --with-deps chromium` first; if apt
   fails with a 404 (a stale package index), `sudo apt-get update` and install again.
 
+- `npm run test:screenshots` — the same web tests with their screenshot comparisons, in CI's
+  Playwright container (Docker or Podman), when `web/`, `tests/web/` or `playwright.config.ts`
+  changed. No container engine → rely on CI's `web` job, and say so.
+- **Changed baselines** (`tests/web/__screenshots__/*.png` in the diff): compare each with
+  `main`'s (`git show origin/main:<path> > /tmp/rv/old-<name>.png`, then look at both). A baseline
+  that changes what the PR is not about, or a web change that should change one and does not, is
+  a finding. A screenshot that differs on CI is a code failure: its `*-diff.png` is in the run's
+  `web-recordings` artifact (`gh run download <run-id> -n web-recordings -D /tmp/rv/ci`).
+
 A check you did not run is reported as `skipped (why)`, never as passing.
 Any failing command is a finding: quote the relevant output.
 

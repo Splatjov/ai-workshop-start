@@ -112,7 +112,8 @@ test('a /tree/<ref> URL scans that commit, through its tree even with a token', 
     [`https://raw.githubusercontent.com/JetBrains/pinned/${sha}/.claude/skills/commits/SKILL.md`]: ok(
       '---\nname: commits\ndescription: Write good commits.\n---\n',
     ),
-    [`${api}/commits/no-such-branch`]: { status: 404, body: { message: 'No commit found for SHA: no-such-branch' } },
+    // What GitHub answers for an unknown ref: a 422, not a 404.
+    [`${api}/commits/no-such-branch`]: { status: 422, body: { message: 'No commit found for SHA: no-such-branch' } },
   });
   const pinned = await atlas(['scan', 'https://github.com/JetBrains/pinned/tree/709079e/'], { fetch, token: 'test' });
   assert.equal(pinned.code, 0, pinned.stderr);

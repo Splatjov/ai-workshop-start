@@ -26,11 +26,35 @@ jobs:
       - run: npm run test:e2e
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # The web view, built and clicked through in Chromium, GitHub answered from recordings.
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:web
       # The real CLI on the fixture repository, as a user would run it: it must exit 0.
       - name: Smoke test
         run: |
           ./skill-atlas help
           ./skill-atlas scan ./fixture
+
+  # The web view, built and clicked through in Chromium, GitHub answered from recordings; its
+  # screenshots compared with the baselines in tests/web/__screenshots__/. In the Playwright
+  # container that made them, so the fonts and the pixels are the same: its tag is the
+  # @playwright/test version of package-lock.json (tests/screenshots.test.ts checks it).
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: mcr.microsoft.com/playwright:v1.65.1-noble
+      options: --ipc=host
+    env:
+      SCREENSHOTS: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - run: npm ci
+      - run: npm run test:web
+      # A video of every test, and for a screenshot that differs its expected, actual and diff
+      # images; the HTML report shows the three side by side. Kept whether the run passed or not.
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: web-recordings
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 14

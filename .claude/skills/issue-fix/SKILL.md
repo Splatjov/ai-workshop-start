@@ -119,7 +119,19 @@ npx playwright install --with-deps chromium && npm run test:web   # apt fails wi
 ./skill-atlas help && ./skill-atlas scan ./fixture
 ```
 
-All of it passes before anything is pushed. Something cannot be made to pass → no PR:
+**Screenshots** (spec/web.md, "Recordings and screenshots"): CI compares the walkthrough's
+screenshots with `tests/web/__screenshots__/`, in the Playwright container. Run them the same way
+when `web/` or `tests/web/` changed: `npm run test:screenshots` (Docker or Podman; `sudo` is fine).
+- One differs → look at its `test-results/**/<name>-diff.png` first. Not what the change is for
+  (a shifted header, a lost word) → a regression: fix the code, never the baseline.
+- Meant to look different → `npm run test:screenshots -- --update-snapshots`, look at every new
+  baseline, and commit them with the change that causes them; the PR's tests section names each one.
+- No container engine → push the branch, let CI fail, take the images it made:
+  `gh run download <run-id> -n web-recordings -D /tmp/ci`, look at each `*-actual.png` and its
+  diff, copy it over its baseline, and push again. Never update a baseline you have not looked at.
+
+All of it passes before anything is pushed (the one exception is the CI fallback for baselines
+above: a branch, no PR yet). Something cannot be made to pass → no PR:
 `state=blocked`, with the failing lines. Never open a PR on a red tree, and never get to green by
 weakening a test or the spec.
 
