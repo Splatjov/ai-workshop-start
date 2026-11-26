@@ -92,3 +92,34 @@ test('rate limit → a message that asks for GITHUB_TOKEN', async () => {
     message: 'GitHub rate limit reached; set GITHUB_TOKEN',
   });
 });
+
+test('a /tree/<ref> URL scans that commit, through its tree even with a token', async () => {
+  const sha = '709079e4a34d6c9234583352550e6a2b88a0bb85';
+  const api = 'https://api.github.com/repos/JetBrains/pinned';
+  const ok = (body: unknown) => ({ status: 200, body });
+  const fetch = replay({
+    [api]: ok({ full_name: 'JetBrains/pinned', default_branch: 'main' }),
+    [`${api}/commits/709079e`]: ok({ sha }),
+    [`${api}/git/trees/${sha}?recursive=1`]: ok({
+      truncated: false,
+      tree: [{ path: '.claude/skills/commits/SKILL.md', mode: '100644', type: 'blob', sha: 'a' }],
+    }),
+    [`https://raw.githubusercontent.com/JetBrains/pinned/${sha}/.claude/skills/commits/SKILL.md`]: ok(
+      '---\nname: commits\ndescription: Write good commits.\n---\n',
+    ),
+    [`${api}/commits/no-such-branch`]: { status: 404, body: { message: 'No commit found for SHA: no-such-branch' } },
+  });
+  const pinned = await atlas(['scan', 'https://github.com/JetBrains/pinned/tree/709079e/'], { fetch, token: 'test' });
+  assert.equal(pinned.code, 0, pinned.stderr);
+  assert.equal(
+    pinned.stdout,
+    [
+      'JetBrains/pinned · 1 skill',
+      'commits — Write good commits.',
+      `  https://github.com/JetBrains/pinned/blob/${sha}/.claude/skills/commits/SKILL.md`,
+    ].join('\n'),
+  );
+
+  const missing = await atlas(['scan', 'github.com/JetBrains/pinned/tree/no-such-branch'], { fetch });
+  assert.deepEqual(missing, { code: 1, stdout: '', stderr: 'Not found in https://github.com/JetBrains/pinned: no-such-branch' });
+});

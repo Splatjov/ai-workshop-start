@@ -1,6 +1,9 @@
 # Repository analysis
 ## Input
 A **GitHub repository** URL, or a local directory
+- `github.com/<owner>/<repo>`: the default branch's latest commit
+- `github.com/<owner>/<repo>/tree/<ref>`: that commit, branch or tag; listed through its tree,
+  as code search sees only the default branch. An unknown ref → a clear message, exit code 1
 ## Output
 Every `SKILL.md`: **name**, **description**, **link**
 ## Architecture
@@ -24,3 +27,8 @@ Skill: id = `repo:path`, name, description, commit
 - No `SKILL.md` → `0 skills`, exit code 0
 - Without `GITHUB_TOKEN`, a tree too large for one answer → only the skill roots, and a *warning*
 - Listed, but gone at the scanned commit → skipped, with a *warning*
+## End-to-end tests
+Real repositories, each pinned to a commit: `npm run test:e2e`, in CI too
+- `JetBrains/koog` at `709079e`: 4 skills, two deep in test resources
+- `JetBrains/android` at `294d4c0`: a tree too large for one answer → `0 skills` and a warning,
+  under 10 s
