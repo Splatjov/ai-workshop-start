@@ -27,6 +27,10 @@ diff against `origin/<base>`.
 
 Empty diff → report "Nothing to review" and stop.
 
+The skill's own file (`.claude/skills/code-review/SKILL.md`) and other agent tooling under `.claude/`
+may be part of the diff: review it as documentation (does it match the repository?), not as product
+code, and mention it under "Checked, no problem".
+
 ## 2. Read the context first
 
 1. `AGENTS.md`: the definition of done.
@@ -46,7 +50,8 @@ Architecture to keep in mind:
 
 ## 3. Run the checks
 
-Run what CI runs (`.github/workflows/ci.yml` is the reference; re-read it in case it changed):
+Run what CI runs (`.github/workflows/ci.yml` is the reference; re-read it in case it changed).
+Install and build output is long: redirect it to a log in `/tmp` and quote only the failing part.
 
 ```bash
 npm ci
@@ -81,7 +86,11 @@ In this order of importance:
      calls `preventDefault()` must still let Ctrl/Cmd/Shift-click open a new tab. Global CSS
      selectors that now hit new elements.
    - Facts the change asserts about the outside world (example repositories, URLs, counts):
-     check them for real, e.g. `./skill-atlas scan <URL>` for each listed repository.
+     check them for real, e.g. `./skill-atlas scan <URL> | head -1` for each listed repository
+     (with `GITHUB_TOKEN`), and say which ones you checked.
+   - A bug in old code that the change **newly makes reachable** (e.g. a race in `scan()` that was
+     guarded by the disabled button, now reachable through a new link) is the change's finding:
+     anchor it at the new code, not the old.
 2. **Spec drift** — behavior changed but `spec/` not updated, or spec updated but code doesn't
    match it. AGENTS.md: "Update it with the code".
 3. **Missing tests** — every case in the spec needs an integration test. A new or changed spec
@@ -104,24 +113,37 @@ Before reporting, try to disprove each candidate:
 - Re-read the surrounding code; check whether another layer already handles it.
 - Prove it where possible: a failing command, a quick script against `fixture/`, or a concrete
   input → wrong output trace. Scratch files go in `/tmp`, never in the repo.
-- Web behavior: write a throwaway Playwright test. Recipe:
+- Web behavior: write a throwaway Playwright test (works as is, from the repository root):
   ```bash
-  mkdir -p /tmp/rv && ln -sf "$PWD/node_modules" /tmp/rv/node_modules
-  # /tmp/rv/pw.config.ts: testDir '/tmp/rv'; baseURL http://localhost:4173/;
-  #   webServer { command: 'npx vite build web && npx vite preview web --port 4173 --strictPort',
-  #               cwd: '<repo>', url: 'http://localhost:4173/', reuseExistingServer: true }
-  # /tmp/rv/probe.spec.ts: import { RECORDING } from '<repo>/tests/web/recording.ts' and answer
-  #   GitHub with page.route(...) like tests/web/view.spec.ts does
+  mkdir -p /tmp/rv && ln -sfn "$PWD/node_modules" /tmp/rv/node_modules
+  cat > /tmp/rv/pw.config.ts <<EOF
+  import { defineConfig, devices } from '@playwright/test';
+  export default defineConfig({
+    testDir: '/tmp/rv', testMatch: '*.spec.ts', reporter: 'list',
+    use: { baseURL: 'http://localhost:4173/' },
+    projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+    webServer: { command: 'npx vite build web && npx vite preview web --port 4173 --strictPort',
+      cwd: '$PWD', url: 'http://localhost:4173/', reuseExistingServer: true },
+  });
+  EOF
+  # /tmp/rv/probe.spec.ts: import { RECORDING } from '$PWD/tests/web/recording.ts', answer GitHub
+  #   with page.route(...) as tests/web/view.spec.ts does, console.log what you observe
   npx playwright test -c /tmp/rv/pw.config.ts
   ```
-  Delay chosen routes (`await new Promise(r => setTimeout(r, 300))` before `route.fulfill`) to
-  expose races; `click({ modifiers: ['ControlOrMeta'] })` plus `context.waitForEvent('page')` to
-  check new-tab behavior.
+  - Races: delay one repository's answers (`if (/atlas-demo/.test(url)) await new Promise(r =>
+    setTimeout(r, 800))` before `route.fulfill`), start that scan, start another through a different
+    entry point, wait, then log the field, `?repo=` and the `h2` — they must name the same repository.
+  - New tab: `const tab = context.waitForEvent('page', { timeout: 2000 })`, then
+    `click({ modifiers: ['ControlOrMeta'] })`, `{ modifiers: ['Shift'] }` and `{ button: 'middle' }`;
+    report which ones work (middle-click fires no `click`, so it usually works even when the others don't).
+- A confirmed bug the tests missed: say which test would have caught it (one line), so the fix
+  comes with its test.
 - Drop anything you can't back with a concrete failure scenario. Mark the rest
   **confirmed** (reproduced) or **plausible** (reasoned, not reproduced).
 
 Severity: **important** — a user can hit it, or it breaks the spec, a claim of the PR or the
 definition of done. **nit** — real but minor (a weak test, an inconsistency with no visible effect).
+Don't inflate: a test that checks one of six items where the spec says "each" is a nit, not important.
 
 Prefer a few real findings over many speculative ones. Zero findings is a valid result.
 
@@ -153,8 +175,9 @@ Print a markdown report:
 ```
 
 Order findings by severity. Line numbers are of the file at the reviewed head.
-Verdict: ❌ if any check fails or any confirmed `important` finding; ⚠️ if only plausible/nit
-findings or the definition of done is incomplete; ✅ otherwise.
+Verdict: ❌ if a check or CI fails, or the definition of done is missing (spec not updated, no test
+for a new spec case); ⚠️ if any `important` finding; ✅ otherwise (nits only, or nothing).
+Tick a definition-of-done box only for what you checked; write `(CI pending)` rather than ticking.
 
 With `--comment` and a PR target:
 - Post each finding with a file/line **inside the diff** as an inline review comment on the PR's
@@ -167,4 +190,5 @@ With `--comment` and a PR target:
   `gh pr view <n> --json comments`) and skip findings already reported, so reruns of the automation
   don't duplicate them.
 
-If a report file is wanted, write it to `$AIR_ARTIFACTS_DIR/code-review.md` when that variable is set.
+When `$AIR_ARTIFACTS_DIR` is set (an automation), always write the report to
+`$AIR_ARTIFACTS_DIR/code-review.md` too, so it survives the run.
