@@ -1,14 +1,28 @@
 # Repository analysis
 ## Input
-A **GitHub repository** URL, or a local directory
+A **GitHub repository** URL, a **GitHub organization** URL, or a local directory
 - `github.com/<owner>/<repo>`: the default branch's latest commit
 - `github.com/<owner>/<repo>/tree/<ref>`: that commit, branch or tag; listed through its tree,
   as code search sees only the default branch. An unknown ref → a clear message, exit code 1
+- `github.com/<owner>`: every repository of that organization, or user, each at its default
+  branch's latest commit
 ## Output
 Every `SKILL.md`: **name**, **description**, **link**
+## Filter
+Words, to show only some of the scanned commit's skills: a skill matches when *every word* is in
+its name, description or path, in any case. No words → every skill. The scan is the same; only
+what is shown differs
+## Organization
+- The same scan, for each repository; the result lists the repositories *that have skills*, by id
+- With `GITHUB_TOKEN`: one code search over all of them, at most 1000 files; more → a *warning*
+- Without: the repository list, then each one's tree, 8 at a time: two requests a repository, so
+  GitHub's limit of 60 an hour is reached past some 25 repositories → the rate limit message
+- Forks and empty repositories are not scanned
+- A warning names its repository: `<owner>/<repo>: <warning>`
+- Unknown organization → a clear message, exit code 1
 ## Architecture
 Core: fetch → find → parse. CLI: a *thin client*.
-Skill: id = `repo:path`, name, description, commit
+Skill: id = `repo:path`, name, description, commit. Organization → repository → skill
 ## Details
 - **GitHub API**, no clone; *under 5 s* for intellij-community
 - The name: front matter, else the directory
