@@ -1,43 +1,45 @@
-// The sky of a scan. Every skill is a star on the unit sphere, the directory that holds its folder
-// is its constellation, and a copy is a companion beside it. The scanned commit seeds it: the same
-// commit, the same sky. No DOM and no WebGL here, so tests/sky.test.ts runs it in Node.
+// The chart of a world. Every skill is a place on the unit sphere, the directory that holds its
+// folder is its land, and a copy is a mark beside it. The scanned commit seeds it: the same commit,
+// the same world. No DOM and no WebGL here, so tests/sky.test.ts runs it in Node.
 import type { ScanView, SkillView } from '../../src/browser.ts';
 
 export type Vec3 = [number, number, number];
 
-export type Star = {
+export type Place = {
   /** The skill's id. */
   id: string;
   name: string;
   /** Where it is, on the unit sphere. */
   at: Vec3;
-  /** 0, faint, to 1, bright: the longer the SKILL.md, the brighter. */
-  magnitude: number;
-  /** Its constellation, an index into the chart's. */
-  constellation: number;
+  /** 0, low, to 1, high: the longer the SKILL.md, the higher the place stands. */
+  height: number;
+  /** Its land, an index into the chart's. */
+  land: number;
   /** One per copy of the skill, close by. */
-  companions: Vec3[];
+  copies: Vec3[];
 };
 
-export type Constellation = {
+export type Land = {
   /** The directory that holds the skills' folders; `/` for the repository root. */
   name: string;
-  /** Where its name is written: under its stars. */
+  /** Where its name is written: under its places. */
   at: Vec3;
-  /** Its stars, as indexes into the chart's. */
-  stars: number[];
-  /** The figure: pairs of the chart's stars to join. */
-  lines: [number, number][];
+  /** Its places, as indexes into the chart's. */
+  places: number[];
+  /** Its roads: pairs of the chart's places to join. */
+  roads: [number, number][];
 };
 
 export type Chart = {
-  /** From the scanned commit; the field stars behind the skills are drawn from it too. */
+  /** From the scanned commit: the same commit, the same world. */
   seed: number;
-  /** The middle of the part of the sky the skills take. */
-  zenith: Vec3;
+  /** The middle of the part of the world the skills take. */
+  middle: Vec3;
+  /** How far apart, at least, two places of one land were set: in radians. */
+  apart: number;
   /** In the scan's order: by name. */
-  stars: Star[];
-  constellations: Constellation[];
+  places: Place[];
+  lands: Land[];
 };
 
 type Scanned = Extract<ScanView, { skills: unknown }>;
@@ -106,8 +108,8 @@ export function home(path: string): string {
   return path.split('/').slice(0, -2).join('/') || '/';
 }
 
-/** A SKILL.md of 120 characters is the faintest star, one of 16 000 the brightest. */
-export function magnitude(markdown: string): number {
+/** A SKILL.md of 120 characters is the lowest place, one of 16 000 the highest. */
+export function height(markdown: string): number {
   const faint = Math.log(120);
   return clamp((Math.log(Math.max(1, markdown.length)) - faint) / (Math.log(16000) - faint), 0, 1);
 }
@@ -116,10 +118,10 @@ export function chartOf(view: Scanned): Chart {
   const { repository, skills } = view;
   const seed = hash(repository.commit || repository.id);
   const rand = random(seed);
-  const zenith = offset(offset([0, 0, 1], rand() * Math.PI * 2, 0), rad(-30 + rand() * 60), Math.PI / 2);
+  const middle = offset(offset([0, 0, 1], rand() * Math.PI * 2, 0), rad(-30 + rand() * 60), Math.PI / 2);
 
-  // The more skills, the more of the sky they take, and the closer they may come. A sky too full
-  // for the smallest gap takes a smaller one still: the sphere has only so much room.
+  // The more skills, the more of the world they take, and the closer they may come. A world too
+  // full for the smallest gap takes a smaller one still: the sphere has only so much room.
   const cap = clamp(rad(17) * Math.sqrt(skills.length), rad(22), rad(100));
   const room = Math.sqrt((0.72 * 4 * Math.PI) / (0.866 * Math.max(1, skills.length)));
   const apart = Math.min(clamp((cap * 1.25) / Math.sqrt(Math.max(1, skills.length)), rad(7), rad(20)), room);
@@ -127,17 +129,17 @@ export function chartOf(view: Scanned): Chart {
   const names = [...new Set(skills.map((skill) => home(skill.path)))].sort();
   const members = names.map((name) => skills.flatMap((skill, index) => (home(skill.path) === name ? [index] : [])));
 
-  // The constellations' centres: a sunflower round the zenith, over as much sky as all the stars
+  // The lands' centres: a sunflower round the middle, over as much of the sphere as all the places
   // need at that gap, or over the middle of the cap if that is more.
   const needed = Math.min(2, Math.sqrt((skills.length * 0.866 * apart * apart) / 0.72 / Math.PI));
   const typical = 0.75 * apart * (members.reduce((sum, stars) => sum + Math.sqrt(stars.length), 0) / Math.max(1, names.length));
   const over = Math.max(flat(cap * 0.62), needed - typical);
   const phase = rand() * Math.PI * 2;
   const centres = names.map((_, i) =>
-    names.length === 1 ? zenith : offset(zenith, round(over * Math.sqrt((i + 0.5) / names.length)), phase + i * GOLDEN),
+    names.length === 1 ? middle : offset(middle, round(over * Math.sqrt((i + 0.5) / names.length)), phase + i * GOLDEN),
   );
 
-  // A sunflower around each constellation's centre, then pushed apart as far as the sky has room.
+  // A sunflower around each land's centre, then pushed apart as far as the sphere has room.
   const at: Vec3[] = [];
   const of: number[] = [];
   members.forEach((stars, c) => {
@@ -150,27 +152,27 @@ export function chartOf(view: Scanned): Chart {
   });
   spread(at, of, centres, members.map((stars) => round(apart * 0.75 * Math.sqrt(stars.length))), apart);
 
-  const stars = skills.map((skill, index) => ({
+  const places = skills.map((skill, index) => ({
     id: skill.id,
     name: skill.name,
     at: at[index],
-    magnitude: magnitude(skill.markdown),
-    constellation: of[index],
-    companions: companions(skill, at[index]),
+    height: height(skill.markdown),
+    land: of[index],
+    copies: copies(skill, at[index]),
   }));
 
-  const constellations = names.map((name, c) => {
-    const middle = unit(members[c].reduce<Vec3>((sum, star) => mix(sum, 1, at[star], 1), [0, 0, 0]));
-    const reach = Math.max(...members[c].map((star) => angle(middle, at[star])));
-    return { name, at: offset(middle, reach + rad(6.5), -Math.PI / 2), stars: members[c], lines: figure(members[c], at) };
+  const lands = names.map((name, c) => {
+    const heart = unit(members[c].reduce<Vec3>((sum, place) => mix(sum, 1, at[place], 1), [0, 0, 0]));
+    const reach = Math.max(...members[c].map((place) => angle(heart, at[place])));
+    return { name, at: offset(heart, reach + rad(6.5), -Math.PI / 2), places: members[c], roads: roads(members[c], at) };
   });
 
-  return { seed, zenith, stars, constellations };
+  return { seed, middle, apart, places, lands };
 }
 
 /**
- * Pushes stars closer than `apart` away from each other, and keeps each within reach of its centre.
- * Where many constellations share little sky, the two pull against each other; so the last passes
+ * Pushes places closer than `apart` away from each other, and keeps each within reach of its land's
+ * centre. Where many lands share little room, the two pull against each other; so the last passes
  * have no centre to hold to, and push apart whatever still crowds.
  */
 function spread(at: Vec3[], of: number[], centres: Vec3[], reach: number[], apart: number) {
@@ -200,12 +202,12 @@ function spread(at: Vec3[], of: number[], centres: Vec3[], reach: number[], apar
 }
 
 /** A copy sits a few degrees from its skill, at a bearing its own path picks. */
-function companions(skill: SkillView, at: Vec3): Vec3[] {
+function copies(skill: SkillView, at: Vec3): Vec3[] {
   return skill.copies.map((copy, i) => offset(at, rad(4.6 + i * 1.5), (hash(copy) / 4294967296) * Math.PI * 2));
 }
 
-/** The figure of a constellation: the shortest tree through its stars, and a loop per five of them. */
-function figure(stars: number[], at: Vec3[]): [number, number][] {
+/** The roads of a land: the shortest tree through its places, and a loop per five of them. */
+function roads(stars: number[], at: Vec3[]): [number, number][] {
   const count = stars.length;
   if (count < 2) return [];
   const between = (i: number, j: number) => angle(at[stars[i]], at[stars[j]]);

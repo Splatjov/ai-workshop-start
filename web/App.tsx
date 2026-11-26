@@ -1,11 +1,14 @@
-// The web view: a celestial atlas. A field for a repository link; its skills, as an index and as the
-// stars of a hand-drawn globe; and the SKILL.md of the chosen one, on a sheet of its own.
+// The web view: an atlas of worlds. Every repository scanned is a world in a system, and the more
+// alike the skills of two repositories, the closer their worlds stand. A field for a repository
+// link; the system, with its register of worlds; and, at a world, its skills as an index and as the
+// places of its map, and the SKILL.md of the chosen one, on a sheet of its own.
 import {
   AlertTriangle,
   ExternalLink,
   FileText,
   FolderGit2,
   Moon,
+  Orbit,
   Rotate3d,
   Search,
   Sparkles,
@@ -27,25 +30,85 @@ import {
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react';
 import { flushSync } from 'react-dom';
 import type { ScanView, SkillView } from '../src/browser.ts';
+import { parseGitHubUrl } from '../src/core/github.ts';
 import { EXAMPLES } from './examples.ts';
-import { Sky, type Theme } from './Sky.tsx';
-import { chartOf } from './sky/chart.ts';
+import { Sky, percent, type Kin, type Theme, type WorldName } from './Sky.tsx';
+import { chartOf, type Chart } from './sky/chart.ts';
+import type { WorldState, WorldView } from './sky/engine.ts';
+import { belt, kinship, layout, radiusOf, reach, ringsOf, type Kinship } from './sky/system.ts';
 
 export type Backend = { scan(input: string): Promise<ScanView> };
 
-const INK = 'var(--ink)';
+type Scanned = Extract<ScanView, { skills: unknown }>;
 
-/** The repository in the page's address, `?repo=<URL>`, so a scan can be shared and reloaded. */
-function repoInAddress(): string {
-  return new URLSearchParams(window.location.search).get('repo') ?? '';
+/** A world of the system: a repository, charted or not yet. */
+type World = {
+  /** `owner/repo`, in lower case, and `@ref` if a ref was asked for: the same repository, the same world. */
+  key: string;
+  /** What to scan. */
+  url: string;
+  name: string;
+  /** One of the examples: it is in the system before it is scanned. */
+  example: boolean;
+  state: WorldState;
+  /** Its scan, once it is charted. */
+  scan?: Scanned;
+};
+
+/** A world as the register lists it: where it stands, and the world most like it. */
+type Charted = World & { scan: Scanned; nearest?: { key: string; name: string; kin: Kinship }; kin: { key: string; name: string; kin: Kinship }[] };
+
+const INK = 'var(--ink)';
+/** How large a world is drawn before its skills are counted. */
+const UNCHARTED = 0.085;
+
+/** The repositories in the page's address, `?repo=<URL>&repo=<URL>`, so a system can be shared and reloaded. */
+function inAddress(): { repos: string[]; system: boolean } {
+  const params = new URLSearchParams(window.location.search);
+  const repos = params.getAll('repo').map((url) => url.trim()).filter(Boolean);
+  return { repos: repos.filter((url, i) => repos.findIndex((other) => keyOf(other) === keyOf(url)) === i), system: params.get('view') === 'system' };
+}
+
+/** The world a link is of: `https://github.com/JetBrains/Kotlin/tree/v1` → `jetbrains/kotlin@v1`. */
+function keyOf(url: string): string {
+  const parsed = parseGitHubUrl(url);
+  if (!parsed) return url.trim();
+  return `${parsed.owner}/${parsed.repo}`.toLowerCase() + (parsed.ref ? `@${parsed.ref}` : '');
+}
+
+/** What a world is called before its repository has answered: `owner/repo`, as typed. */
+function nameOf(url: string): string {
+  const parsed = parseGitHubUrl(url);
+  if (!parsed) return url.trim();
+  return `${parsed.owner}/${parsed.repo}` + (parsed.ref ? ` @ ${parsed.ref}` : '');
+}
+
+/** The worlds the page opens with: the examples, not yet charted, and what its address asks for, about to be scanned. */
+function firstWorlds(): World[] {
+  const { repos } = inAddress();
+  const examples = EXAMPLES.map((id): World => {
+    const asked = repos.find((url) => keyOf(url) === id.toLowerCase());
+    return { key: id.toLowerCase(), url: asked ?? `https://github.com/${id}`, name: id, example: true, state: asked ? 'scanning' : 'uncharted' };
+  });
+  const others = repos
+    .filter((url) => !examples.some((world) => world.key === keyOf(url)))
+    .map((url): World => ({ key: keyOf(url), url, name: nameOf(url), example: false, state: 'scanning' }));
+  return [...examples, ...others];
 }
 
 export function App({ backend }: { backend: Backend }) {
-  const [input, setInput] = useState(repoInAddress);
-  const [scanning, setScanning] = useState(false);
-  const [view, setView] = useState<ScanView>();
-  const [selected, setSelected] = useState<string>();
+  const [input, setInput] = useState(() => inAddress().repos[0] ?? '');
+  const [worlds, setWorlds] = useState(firstWorlds);
+  /** The worlds asked for, in the order they were: the address lists them. */
+  const [asked, setAsked] = useState(() => inAddress().repos.map(keyOf));
+  /** The world the address opens at; none, the system. */
+  const [front, setFront] = useState(() => (inAddress().system ? undefined : inAddress().repos.map(keyOf)[0]));
+  /** The world in view; none, the system. */
+  const [at, setAt] = useState<string>();
+  const [selected, setSelected] = useState<Record<string, string | undefined>>({});
   const [pointed, setPointed] = useState<string>();
+  const [pointedWorld, setPointedWorld] = useState<string>();
+  const [failure, setFailure] = useState<string>();
   const [theme, expose] = useTheme();
   const slot = useRef<HTMLDivElement>(null);
   const aim = useRef<HTMLSpanElement>(null);
@@ -56,36 +119,105 @@ export function App({ backend }: { backend: Backend }) {
   useEffect(() => {
     void document.fonts.ready.then(() => setSettled(true));
   }, []);
-
-  const scanned = view && 'skills' in view ? view : undefined;
-  const chart = useMemo(() => scanned && chartOf(scanned), [scanned]);
-  // Only the latest scan shows: an earlier one that answers later is dropped.
+  // Only the latest scan takes the view: an earlier one that answers later is charted where it stands.
   const latest = useRef(0);
+  const charts = useRef(new WeakMap<Scanned, Chart>());
+  const kinships = useRef(new WeakMap<Scanned, WeakMap<Scanned, Kinship>>());
 
-  async function scan(url: string) {
-    if (!url.trim()) return;
-    const id = ++latest.current;
-    setScanning(true);
-    const result = await backend.scan(url);
-    if (id !== latest.current) return;
-    setView(result);
-    setSelected('skills' in result ? result.skills[0]?.id : undefined);
-    setPointed(undefined);
-    setScanning(false);
+  const scanning = worlds.some((world) => world.state === 'scanning');
+  const here = worlds.find((world) => world.key === at && world.scan);
+  const view = here ? 'world' : worlds.some((world) => world.scan) ? 'system' : 'cover';
+
+  /** Scans a repository: its world is charted where it stands, and, unless told not to, the view goes to it. */
+  function chartIt(url: string, follow = true) {
+    const asking = url.trim();
+    if (!asking) return;
+    const key = keyOf(asking);
+    const turn = follow ? ++latest.current : 0;
+    setWorlds((worlds) => {
+      // What could not be scanned before is wiped: an example goes back to its place, anything else goes.
+      const kept = worlds
+        .filter((world) => world.key === key || world.state !== 'lost' || world.example)
+        .map((world) => (world.state === 'lost' && world.key !== key ? { ...world, state: 'uncharted' as const } : world));
+      const known = kept.find((world) => world.key === key);
+      if (known) return kept.map((world) => (world === known ? { ...world, url: asking, state: 'scanning' as const } : world));
+      return [...kept, { key, url: asking, name: nameOf(asking), example: false, state: 'scanning' as const }];
+    });
+    setAsked((asked) => [...asked.filter((other) => other !== key), key]);
+    if (follow) {
+      setFailure(undefined);
+      setFront(key);
+      setAt(undefined);
+      setPointed(undefined);
+    }
+    void backend.scan(asking).then((result) => {
+      const charted = 'skills' in result;
+      setWorlds((worlds) =>
+        worlds.map((world) => {
+          if (world.key !== key) return world;
+          if (!charted) return { ...world, state: 'lost' as const, scan: undefined };
+          const ref = parseGitHubUrl(asking)?.ref;
+          return { ...world, state: 'charted' as const, scan: result, name: result.repository.id + (ref ? ` @ ${ref}` : '') };
+        }),
+      );
+      if (charted) setSelected((selected) => ({ ...selected, [key]: result.skills[0]?.id }));
+      if (follow && turn !== latest.current) return;
+      if (charted && follow) setAt(key);
+      if (!charted) setFailure(result.error);
+    });
   }
 
+  // What the address asks for is scanned at once, and once.
+  const opened = useRef(false);
   useEffect(() => {
-    const url = repoInAddress();
-    if (url) void scan(url);
+    if (opened.current) return;
+    opened.current = true;
+    const { repos, system } = inAddress();
+    repos.forEach((url, i) => chartIt(url, i === 0 && !system));
   }, []);
 
-  /** Scans, and writes the repository to the page's address. */
-  function chartIt(url: string) {
+  // The address lists what was asked for, the world in view first: opening it charts the same system.
+  useEffect(() => {
     const address = new URL(window.location.href);
-    address.searchParams.set('repo', url.trim());
-    window.history.replaceState(null, '', address);
-    void scan(url);
+    address.searchParams.delete('repo');
+    address.searchParams.delete('view');
+    // What was asked for and then wiped (it could not be scanned) is not asked for again.
+    const urls = [...(front ? [front] : []), ...asked.filter((key) => key !== front)].flatMap((key) => worlds.find((world) => world.key === key && world.state !== 'uncharted')?.url ?? []);
+    for (const url of urls) address.searchParams.append('repo', url);
+    if (!front && urls.length > 0) address.searchParams.set('view', 'system');
+    if (address.href !== window.location.href) window.history.replaceState(null, '', address);
+  }, [asked, front, worlds]);
+
+  /** Goes to a world: one that is charted is shown; one that is not is scanned first. With no key, back to the system. */
+  function visit(key: string | undefined) {
+    const world = worlds.find((world) => world.key === key);
+    setPointed(undefined);
+    setPointedWorld(undefined);
+    if (!world) {
+      setAt(undefined);
+      if (asked.length > 0) setFront(undefined);
+    } else if (world.state === 'scanning') {
+      return;
+    } else if (world.scan) {
+      setAt(world.key);
+      setFront(world.key);
+      setInput(world.url);
+      if (!asked.includes(world.key)) setAsked([...asked, world.key]);
+    } else {
+      setInput(world.url);
+      chartIt(world.url);
+    }
   }
+
+  // Escape leaves a world for the system.
+  useEffect(() => {
+    if (!here) return;
+    const leave = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) visit(undefined);
+    };
+    window.addEventListener('keydown', leave);
+    return () => window.removeEventListener('keydown', leave);
+  });
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -100,28 +232,109 @@ export function App({ backend }: { backend: Backend }) {
     chartIt(url);
   }
 
+  /** Scans every example not yet charted; the view stays over the system, to watch them come. */
+  function chartAll() {
+    setFailure(undefined);
+    setFront(undefined);
+    for (const world of worlds) if (world.example && !world.scan && world.state !== 'scanning') chartIt(world.url, false);
+  }
+
+  // ---- the system: where every world stands -------------------------------------------------------
+
+  const system = useMemo(() => {
+    const charted = worlds.filter((world): world is World & { scan: Scanned } => Boolean(world.scan)).sort((a, b) => (a.key < b.key ? -1 : 1));
+    const between = (a: Scanned, b: Scanned): Kinship => {
+      const [first, second] = a.repository.id < b.repository.id ? [a, b] : [b, a];
+      if (!kinships.current.has(first)) kinships.current.set(first, new WeakMap());
+      const known = kinships.current.get(first)!;
+      if (!known.has(second)) known.set(second, kinship(first.skills, second.skills));
+      return known.get(second)!;
+    };
+    const likeness = charted.map((a) => charted.map((b) => (a === b ? 1 : between(a.scan, b.scan).likeness)));
+    const radii = charted.map((world) => radiusOf(world.scan.skills.length));
+    const spots = layout(likeness, radii);
+    // The rim of the plate lies just outside the charted worlds; those not yet charted wait on it.
+    const waiting = worlds.some((world) => !world.scan);
+    const rim = Math.max(waiting ? 0.66 : 0.3, reach(spots, radii) + (waiting ? 0.2 : 0.14));
+
+    const register = charted.map((world, i): Charted => {
+      const kin = charted
+        .flatMap((other, j) => (j === i ? [] : [{ key: other.key, name: other.name, kin: between(world.scan, other.scan) }]))
+        .sort((a, b) => b.kin.likeness - a.kin.likeness || (a.key < b.key ? -1 : 1));
+      return { ...world, kin, nearest: kin[0] };
+    });
+
+    // A world not yet charted waits on the rim of the plate: the examples each in their own place.
+    const extras = worlds.filter((world) => !world.scan && !world.example);
+    const slots = EXAMPLES.length + extras.length;
+    const views = worlds.map((world): WorldView => {
+      const index = charted.findIndex((other) => other.key === world.key);
+      if (index >= 0) {
+        const scan = charted[index].scan;
+        if (!charts.current.has(scan)) charts.current.set(scan, chartOf(scan));
+        return { key: world.key, state: world.state, at: spots[index], radius: radii[index], rings: ringsOf(scan.skills).length, chart: charts.current.get(scan) };
+      }
+      const slot = world.example ? EXAMPLES.findIndex((id) => id.toLowerCase() === world.key) : EXAMPLES.length + extras.indexOf(world);
+      return { key: world.key, state: world.state, at: belt(slot, slots, rim), radius: UNCHARTED, rings: 0 };
+    });
+
+    const names = worlds.map((world): WorldName => {
+      const count = world.scan?.skills.length ?? 0;
+      const note = world.state === 'scanning' ? 'scanning…' : world.state === 'lost' ? 'not scanned' : world.scan ? `${count} ${count === 1 ? 'skill' : 'skills'}` : 'uncharted';
+      return { key: world.key, name: world.name, note, state: world.state, rings: world.scan ? ringsOf(world.scan.skills).length : 0 };
+    });
+    return { views, names, rim, register };
+  }, [worlds]);
+
+  // A thread from each world to the one most like it; and from the world pointed at, to every other.
+  const kin = useMemo(() => {
+    const threads = new Map<string, Kin>();
+    const thread = (a: string, b: string, likeness: number) => {
+      const [first, second] = a < b ? [a, b] : [b, a];
+      threads.set(`${first}|${second}`, { a: first, b: second, likeness });
+    };
+    for (const world of system.register) {
+      if (world.nearest) thread(world.key, world.nearest.key, world.nearest.kin.likeness);
+      if (world.key === pointedWorld) for (const other of world.kin) thread(world.key, other.key, other.kin.likeness);
+    }
+    return [...threads.values()].sort((a, b) => (a.a + a.b < b.a + b.b ? -1 : 1));
+  }, [system, pointedWorld]);
+
+  const chart = here && charts.current.get(here.scan!);
+  const chosen = here ? selected[here.key] : undefined;
+  const charted = system.register;
+  const uncharted = worlds.filter((world) => world.example && !world.scan && world.state !== 'scanning').length;
+
   return (
-    <div className="plate" data-view={scanned ? 'chart' : 'cover'} data-scanning={scanning ? '' : undefined}>
+    <div className="plate" data-view={view} data-scanning={scanning ? '' : undefined}>
       <Sky
         slot={slot}
         aim={aim}
+        worlds={system.views}
+        names={system.names}
+        kin={kin}
+        rim={system.rim}
+        at={here?.key}
         chart={chart}
-        chosen={selected}
+        chosen={chosen}
         pointed={pointed}
-        scanning={scanning}
-        lost={Boolean(view && 'error' in view)}
+        pointedWorld={pointedWorld}
         theme={theme}
-        onChoose={setSelected}
+        onChoose={(id) => here && setSelected((selected) => ({ ...selected, [here.key]: id }))}
         onPoint={setPointed}
+        onVisit={visit}
+        onPointWorld={setPointedWorld}
       />
 
       <DrawablyCard className="neatline" aria-hidden="true" roughness={0.8} />
       <div className="margin" aria-hidden="true">
-        <span className="plate-name">Atlas Coelestis · every SKILL.md, charted by hand</span>
+        <span className="plate-name">Atlas of worlds · every SKILL.md, charted by hand</span>
         <span className="aim" ref={aim}>
-          α 00h 00m  δ +00° 00′
+          az 000° 00′  alt +00° 00′
         </span>
-        <span className="epoch">{scanned ? `epoch ${scanned.repository.commit.slice(0, 7) || 'local'}` : 'plate I'}</span>
+        <span className="epoch">
+          {here ? `epoch ${here.scan!.repository.commit.slice(0, 7) || 'local'}` : charted.length > 0 ? `plate II · ${charted.length} ${charted.length === 1 ? 'world' : 'worlds'}` : 'plate I'}
+        </span>
       </div>
 
       <label className="exposure">
@@ -137,7 +350,7 @@ export function App({ backend }: { backend: Backend }) {
       <main>
         <header className="masthead">
           <p className="eyebrow">
-            <Telescope size={16} color={INK} /> A celestial atlas of agent skills
+            <Telescope size={16} color={INK} /> An atlas of agent skills, one world a repository
           </p>
           <h1>
             <span className="word">Skill</span>{' '}
@@ -169,66 +382,129 @@ export function App({ backend }: { backend: Backend }) {
             </DrawablyButton>
           </form>
 
-          {!scanned && (
+          {failure && (
+            <DrawablyAlert role="alert" className="error" stroke="var(--accent)">
+              <span data-tag>error</span> {failure}
+            </DrawablyAlert>
+          )}
+        </header>
+
+        {!here && (
+          <aside className="register">
+            {charted.length > 0 && (
+              <section aria-label="The system">
+                <h2 className="system">
+                  The system{' '}
+                  <DrawablyBadge>
+                    {charted.length} {charted.length === 1 ? 'world' : 'worlds'}
+                  </DrawablyBadge>
+                </h2>
+                <p className="law">The closer two worlds stand, the more alike their skills.</p>
+                <nav className="index" aria-label="Worlds">
+                  <ul>
+                    {charted.map((world, index) => (
+                      <li key={world.key} style={{ '--i': Math.min(index, 14) } as CSSProperties}>
+                        <button
+                          type="button"
+                          data-pointed={world.key === pointedWorld ? '' : undefined}
+                          onClick={() => visit(world.key)}
+                          onPointerEnter={() => setPointedWorld(world.key)}
+                          onPointerLeave={() => setPointedWorld(undefined)}
+                          onFocus={() => setPointedWorld(world.key)}
+                          onBlur={() => setPointedWorld(undefined)}
+                        >
+                          <strong>{world.name}</strong>
+                          <span>
+                            {world.scan.skills.length} {world.scan.skills.length === 1 ? 'skill' : 'skills'}
+                            {world.nearest && (
+                              <>
+                                {' · nearest '}
+                                {world.nearest.name}, {percent(world.nearest.kin.likeness)} alike
+                              </>
+                            )}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </nav>
+              </section>
+            )}
+
             <nav className="examples" aria-label="Examples">
-              <span>or chart one of these</span>
+              <span>{charted.length > 0 ? 'chart another' : 'or chart one of these'}</span>
               <ul>
                 {EXAMPLES.map((id) => {
                   const url = `https://github.com/${id}`;
+                  const world = worlds.find((other) => other.key === id.toLowerCase());
                   return (
                     <li key={id}>
-                      <a href={`?repo=${encodeURIComponent(url)}`} onClick={(event) => pick(event, url)}>
+                      <a
+                        href={`?repo=${encodeURIComponent(url)}`}
+                        data-state={world?.state}
+                        onClick={(event) => pick(event, url)}
+                        onPointerEnter={() => setPointedWorld(id.toLowerCase())}
+                        onPointerLeave={() => setPointedWorld(undefined)}
+                      >
                         {id}
                       </a>
                     </li>
                   );
                 })}
               </ul>
+              {uncharted > 1 && (
+                <button type="button" className="all" disabled={scanning} onClick={chartAll}>
+                  chart all {uncharted === EXAMPLES.length ? 'nine' : uncharted}
+                </button>
+              )}
             </nav>
-          )}
-
-          {view && 'error' in view && (
-            <DrawablyAlert role="alert" className="error" stroke="var(--accent)">
-              <span data-tag>error</span> {view.error}
-            </DrawablyAlert>
-          )}
-        </header>
+          </aside>
+        )}
 
         <div className="globe" ref={slot} aria-hidden="true">
           <StillGlobe />
-          {!scanned && (
+          {view === 'cover' && (
             <>
               <p className="note" ref={note}>
-                every star
+                every world
                 <br />
-                is a SKILL.md
+                is a repository
               </p>
               <span className="note-target" ref={noteTarget} />
+              <p className="law-note">
+                the closer two worlds stand,
+                <br />
+                the more alike their skills
+              </p>
               <DrawablyArrow key={String(settled)} from={note} to={noteTarget} stroke="var(--accent)" width={1.6} />
             </>
           )}
-          {scanned && scanned.skills.length > 0 ? (
+          {here && here.scan!.skills.length > 0 ? (
             <p className="legend">
-              <i className="mark star" /> a skill <i className="mark copy" /> its copy
-              <span>the brighter, the longer its SKILL.md</span>
+              <i className="mark place" /> a skill <i className="mark copy" /> its copy
+              <span>the higher it stands, the longer its SKILL.md</span>
               <span className="turn">
                 <Rotate3d size={13} color="var(--pencil)" /> drag to turn
               </span>
             </p>
           ) : (
             <p className="hint">
-              <Rotate3d size={18} color="var(--pencil)" /> drag to turn the sky
+              <Rotate3d size={18} color="var(--pencil)" />{' '}
+              {here ? 'drag to turn it' : view === 'system' ? 'drag to turn the plate, scroll to go nearer' : 'drag to turn the plate'}
             </p>
           )}
         </div>
 
-        {scanned && (
+        {here && (
           <Result
-            view={scanned}
-            selected={scanned.skills.find((skill) => skill.id === selected)}
+            view={here.scan!}
+            selected={here.scan!.skills.find((skill) => skill.id === chosen)}
             pointed={pointed}
-            onSelect={setSelected}
+            kin={charted.find((world) => world.key === here.key)?.kin ?? []}
+            worlds={charted.length}
+            onSelect={(id) => setSelected((selected) => ({ ...selected, [here.key]: id }))}
             onPoint={setPointed}
+            onVisit={visit}
           />
         )}
       </main>
@@ -240,20 +516,28 @@ function Result({
   view,
   selected,
   pointed,
+  kin,
+  worlds,
   onSelect,
   onPoint,
+  onVisit,
 }: {
-  view: Extract<ScanView, { skills: unknown }>;
+  view: Scanned;
   selected?: SkillView;
   pointed?: string;
+  /** The other worlds of the system, the most alike first. */
+  kin: { key: string; name: string; kin: Kinship }[];
+  /** How many worlds the system has. */
+  worlds: number;
   onSelect(id: string): void;
   onPoint(id: string | undefined): void;
+  onVisit(key: string | undefined): void;
 }) {
   const { repository, skills, warnings } = view;
   const list = useRef<HTMLUListElement>(null);
 
   // The chosen skill comes into view in the index, however it was chosen: by a click, a key or its
-  // star on the globe. The index scrolls; the page itself does not move.
+  // place on the world. The index scrolls; the page itself does not move.
   useEffect(() => {
     const index = list.current;
     const current = index?.querySelector<HTMLElement>('[aria-current="true"]');
@@ -263,7 +547,7 @@ function Result({
     else if (box.bottom > frame.bottom - 26) index.scrollTop += box.bottom - frame.bottom + 26;
   }, [selected?.id]);
 
-  /** Down and up choose the next and the previous skill, and the globe turns to its star. */
+  /** Down and up choose the next and the previous skill, and the world turns to its place. */
   function step(event: KeyboardEvent<HTMLUListElement>) {
     const by = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0;
     const buttons = [...(list.current?.querySelectorAll('button') ?? [])];
@@ -277,9 +561,18 @@ function Result({
   return (
     <section aria-label="Scan result" className="result">
       <div className="ledger">
+        <button type="button" className="back" onClick={() => onVisit(undefined)}>
+          <Orbit size={15} color="var(--pencil)" /> the system · {worlds} {worlds === 1 ? 'world' : 'worlds'}
+        </button>
         <h2 className="repository">
-          <a href={`${repository.url}/tree/${repository.commit}`} target="_blank" rel="noreferrer">
-            {repository.id}
+          <a
+            href={`${repository.url}/tree/${repository.commit}`}
+            target="_blank"
+            rel="noreferrer"
+            style={{ '--fit': Math.min(1, 11 / repository.name.length) } as CSSProperties}
+          >
+            <span className="owner">{repository.organization}/</span>
+            <span className="name">{repository.name}</span>
           </a>{' '}
           <DrawablyBadge>
             {skills.length} {skills.length === 1 ? 'skill' : 'skills'}
@@ -297,10 +590,26 @@ function Result({
           </div>
         )}
 
-        {skills.length === 0 && <p className="void">A dark sky: there is no SKILL.md in this repository.</p>}
+        {kin.length > 0 && (
+          <nav className="kin" aria-label="Kin">
+            <span>most alike</span>
+            {kin.slice(0, 3).map((other) => (
+              <button
+                type="button"
+                key={other.key}
+                title={other.kin.twins.length > 0 ? `both have: ${other.kin.twins.slice(0, 4).map((twin) => (twin.a === twin.b ? twin.a : `${twin.a} ≈ ${twin.b}`)).join(', ')}` : undefined}
+                onClick={() => onVisit(other.key)}
+              >
+                {other.name} <b>{percent(other.kin.likeness)}</b>
+              </button>
+            ))}
+          </nav>
+        )}
+
+        {skills.length === 0 && <p className="void">A bare world, all sea: there is no SKILL.md in this repository.</p>}
 
         {skills.length > 0 && (
-          <nav aria-label="Skills">
+          <nav className="index" aria-label="Skills">
             <ul ref={list} onKeyDown={step}>
               {skills.map((skill, index) => (
                 <li key={skill.id} style={{ '--i': Math.min(index, 14) } as CSSProperties}>
@@ -409,7 +718,7 @@ function firstSentence(text: string): string {
   return /^.*?[.!?](?=\s|$)/.exec(line)?.[0] ?? line;
 }
 
-/** Where there is no WebGL, the globe is still: a sketch in drawably's own strokes. */
+/** Where there is no WebGL, a world is still: a sketch in drawably's own strokes. */
 function StillGlobe() {
   const o = { seed: 7, roughness: 0.9 };
   return (

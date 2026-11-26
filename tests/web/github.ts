@@ -1,5 +1,6 @@
 // GitHub for the web view's tests: answered from tests/web/recording.ts, never from the network.
-import type { BrowserContext, Page } from '@playwright/test';
+import { expect, type BrowserContext, type Locator, type Page } from '@playwright/test';
+import { ink } from './in-page.js';
 import { RECORDING } from './recording.ts';
 
 export type Recorded = {
@@ -52,3 +53,50 @@ export async function scan(page: Page, url: string) {
 export const skillButtons = (page: Page) => page.getByRole('navigation', { name: 'Skills' }).getByRole('button');
 export const chosen = (page: Page) => page.getByRole('region', { name: /: SKILL\.md$/ });
 export const examples = (page: Page) => page.getByRole('navigation', { name: 'Examples' }).getByRole('link');
+
+export const sky = (page: Page) => page.locator('canvas.sky');
+export const place = (page: Page, name: string) => page.locator('[data-place]').filter({ hasText: new RegExp(`^${name}$`) });
+/** A world's name on the sky: `owner/repo`, in lower case. */
+export const world = (page: Page, key: string) => page.locator(`[data-world="${key}"]`);
+export const worldButtons = (page: Page) => page.getByRole('navigation', { name: 'Worlds' }).getByRole('button');
+
+/**
+ * Where something named on the sky is, on the page, once it has come to rest: its name's element is
+ * a point there, placed by the engine a frame or more after the page wrote it.
+ */
+export async function where(page: Page, named: Locator): Promise<{ x: number; y: number }> {
+  await expect(named).toHaveAttribute('style', /translate3d/);
+  let last = await named.boundingBox();
+  await expect
+    .poll(
+      async () => {
+        const next = await named.boundingBox();
+        const rested = next !== null && last !== null && next.x === last.x && next.y === last.y;
+        last = next;
+        return rested;
+      },
+      { intervals: [150] },
+    )
+    .toBe(true);
+  return { x: last!.x, y: last!.y };
+}
+
+/** The ink on a sky that has stopped changing: for a still sky, to compare what is drawn. */
+export async function rested(page: Page) {
+  let last = await page.evaluate(ink);
+  await expect
+    .poll(
+      async () => {
+        const next = await page.evaluate(ink);
+        const same = next.weight === last.weight;
+        last = next;
+        return same;
+      },
+      { intervals: [200] },
+    )
+    .toBe(true);
+  return last;
+}
+
+/** `?repo=<URL>&repo=<URL>`: the address that charts these repositories. */
+export const address = (ids: string[], more = '') => `./?${ids.map((id) => `repo=${encodeURIComponent(`https://github.com/${id}`)}`).join('&')}${more}`;

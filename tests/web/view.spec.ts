@@ -1,7 +1,7 @@
 // spec/web.md: the page, as a user sees it, over recorded GitHub answers.
 import { expect, test, type Locator } from '@playwright/test';
 import { chosen, recorded, scan, skillButtons, type Recorded } from './github.ts';
-import { starsInView } from './in-page.js';
+import { placesInView } from './in-page.js';
 import { BROKEN_MD, COMMIT, COMMITS_MD, MANY_BIG_MD, MANY_ONE_LINE_MD, STYLE_MD } from './recording.ts';
 
 const blob = `https://github.com/JetBrains/atlas-demo/blob/${COMMIT}`;
@@ -107,7 +107,7 @@ test('many warnings: each one a note, and the index keeps its room', async ({ pa
 });
 
 test('a long index: the chosen skill stays in view, however it is chosen', async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' }); // the globe turns at once, so its stars stand still
+  await page.emulateMedia({ reducedMotion: 'reduce' }); // the world turns at once, so its places stand still
   await page.goto('./');
   await scan(page, 'https://github.com/JetBrains/many');
   const buttons = skillButtons(page);
@@ -127,13 +127,13 @@ test('a long index: the chosen skill stays in view, however it is chosen', async
   await expect(buttons.nth(2)).toHaveAttribute('aria-current', 'true');
   await expect(buttons.nth(2)).toBeInViewport({ ratio: 1 });
 
-  // By its star, on the globe: the index scrolls to a skill that was out of view.
-  await expect.poll(() => page.evaluate(starsInView)).toContain('skill-03');
-  const far = (await page.evaluate(starsInView)).filter((name) => name >= 'skill-12').at(-1);
-  expect(far, 'a star in view whose skill is far down the index').toBeDefined();
+  // By its place, on the world: the index scrolls to a skill that was out of view.
+  await expect.poll(() => page.evaluate(placesInView)).toContain('skill-03');
+  const far = (await page.evaluate(placesInView)).filter((name) => name >= 'skill-12').at(-1);
+  expect(far, 'a place in view whose skill is far down the index').toBeDefined();
   const entry = buttons.filter({ hasText: far });
   await expect(entry).not.toBeInViewport();
-  const at = (await page.locator('[data-star]').filter({ hasText: far }).boundingBox())!;
+  const at = (await page.locator('[data-place]').filter({ hasText: far }).boundingBox())!;
   await page.mouse.click(at.x, at.y);
   await expect(entry).toHaveAttribute('aria-current', 'true');
   await expect(entry).toBeInViewport({ ratio: 1 });

@@ -1,4 +1,4 @@
-/* A celestial atlas, drawn by hand. Day: pen on paper. Night: chalk on cyanotype. */
+/* An atlas of worlds, drawn by hand. Day: pen on paper. Night: chalk on cyanotype. */
 
 :root {
   color-scheme: light;
@@ -101,6 +101,11 @@ a {
   color: inherit;
 }
 
+button {
+  color: inherit;
+  font: inherit;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -109,7 +114,7 @@ a {
   clip-path: inset(50%);
 }
 
-/* ---- the sky: one canvas behind the whole page, and the names beside its stars ---------------- */
+/* ---- the sky: one canvas behind the whole page, and what is written beside what it draws ------- */
 
 .sky {
   position: fixed;
@@ -140,7 +145,7 @@ a {
   transition: opacity 180ms linear;
 }
 
-/* Each name's element is a point, at its star; the name hangs beside it. */
+/* Each name's element is a point, at what it names; the name hangs beside it. */
 .names i {
   position: absolute;
   top: 0;
@@ -148,7 +153,80 @@ a {
   white-space: nowrap;
 }
 
-.names [data-star] i {
+/* A world's name is written under it; over it or beside it where that is taken. */
+.names [data-world] i {
+  left: 0;
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  transform: translate(-50%, var(--gap, 60px));
+}
+
+.names [data-world][data-side='over'] i {
+  transform: translate(-50%, calc(-100% - var(--gap, 60px)));
+}
+
+.names [data-world][data-side='right'] i {
+  justify-items: start;
+  transform: translate(var(--gap, 60px), -50%);
+}
+
+.names [data-world][data-side='left'] i {
+  justify-items: end;
+  transform: translate(calc(-100% - var(--gap, 60px)), -50%);
+}
+
+.names [data-world] b {
+  font: 400 17px/1 var(--pen);
+  color: var(--ink);
+  padding: 1px 6px 2px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--paper) 72%, transparent);
+  box-shadow: 0 0 5px 3px color-mix(in srgb, var(--paper) 72%, transparent);
+}
+
+/* What is known of it: how many skills, once it is pointed at; or that it is being scanned, or was not found. */
+.names [data-world] small {
+  font: 500 8.5px/1 var(--mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--pencil);
+}
+
+.names [data-world]:is([data-state='charted'], [data-state='uncharted']):not([data-pointed]) small {
+  display: none;
+}
+
+.names [data-world]:is([data-state='uncharted'], [data-state='scanning']) b {
+  color: var(--pencil);
+}
+
+.names [data-world][data-state='lost'] :is(b, small),
+.names [data-world][data-state='scanning'] small {
+  color: var(--accent);
+}
+
+.names [data-world][data-pointed] {
+  z-index: 1;
+}
+
+.names [data-world][data-pointed] b {
+  color: var(--accent);
+}
+
+/* How alike two worlds are, written in the middle of the thread between them. */
+.names [data-kin] i {
+  transform: translate(-50%, -50%);
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  padding: 3px 5px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  box-shadow: 0 0 4px 2px color-mix(in srgb, var(--paper) 88%, transparent);
+}
+
+.names [data-place] i {
   left: var(--gap, 12px);
   transform: translateY(-50%);
   font: 400 17px/1.15 var(--pen);
@@ -160,31 +238,34 @@ a {
   box-shadow: 0 0 5px 3px color-mix(in srgb, var(--paper) 80%, transparent);
 }
 
-.names [data-star][data-side='left'] i {
+.names [data-place][data-side='left'] i {
   left: auto;
   right: var(--gap, 12px);
 }
 
-.names [data-star][data-side='above'] i {
+.names [data-place][data-side='above'] i {
   left: var(--shift, 0px);
   transform: translate(-50%, calc(-100% - var(--gap, 12px) - 4px));
 }
 
-.names [data-star]:is([data-pointed], [data-chosen]) {
+.names [data-place]:is([data-pointed], [data-chosen]) {
   z-index: 1;
 }
 
-.names [data-star][data-chosen] i {
+.names [data-place][data-chosen] i {
   color: var(--accent);
   font-size: 20px;
 }
 
-.names [data-constellation] i {
+.names [data-land] i {
   transform: translate(-50%, -50%);
   font: 500 9.5px/1 var(--mono);
   letter-spacing: 0.28em;
   text-transform: uppercase;
   color: var(--pencil);
+  padding: 2px 5px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--paper) 70%, transparent);
 }
 
 :root[data-sky='none'] :is(.sky, .names),
@@ -193,6 +274,10 @@ a {
 }
 
 /* ---- the plate: a neatline round the page, and what is written in its margin ------------------ */
+
+.plate {
+  --zoom: 0;
+}
 
 .neatline {
   position: fixed;
@@ -248,12 +333,7 @@ a {
   cursor: pointer;
 }
 
-/* The night spreads from the switch: the page's own animation draws the circle. The page stays
-   under the hand while it does. */
-::view-transition {
-  pointer-events: none;
-}
-
+/* The night spreads from the switch: the page's own animation draws the circle. */
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation: none;
@@ -273,7 +353,6 @@ main {
 h1,
 h2,
 h3 {
-  font-family: var(--pen);
   font-weight: normal;
   margin: 0;
 }
@@ -282,19 +361,29 @@ h3 {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 0 0 22px;
+  margin: 0 0 26px;
   font: 500 11px/1 var(--mono);
   letter-spacing: 0.26em;
   text-transform: uppercase;
   color: var(--pencil);
 }
 
+/* The title is set as an atlas's title page is: in a serif cut for display, as large as the page takes. */
 h1 {
   position: relative;
   width: max-content;
   max-width: 100%;
+  font-family: var(--serif);
+  font-weight: 300;
+  font-variation-settings: 'opsz' 144, 'SOFT' 0, 'WONK' 0;
   line-height: 0.8;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.045em;
+}
+
+h1 .word + .word {
+  font-style: italic;
+  font-weight: 340;
+  font-variation-settings: 'opsz' 144, 'SOFT' 60, 'WONK' 1;
 }
 
 h1 .spark {
@@ -348,6 +437,73 @@ h1 .spark {
   white-space: nowrap;
 }
 
+.error {
+  margin-top: 26px;
+  color: var(--accent);
+  font: 500 14px/1.45 var(--mono);
+  width: auto;
+  max-width: 100%;
+  align-items: baseline;
+  overflow-wrap: anywhere;
+}
+
+.error [data-tag] {
+  flex: none;
+  white-space: nowrap;
+  padding: 3px 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+/* ---- the register: the worlds of the system, and those not yet charted ------------------------- */
+
+.register {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  /* It gives way as the eye goes to a world. */
+  opacity: clamp(0, 1 - var(--zoom) * 2.4, 1);
+  transform: translateX(calc(var(--zoom) * -46px));
+}
+
+.register section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  animation: unfold-left 700ms var(--ease) both;
+}
+
+.system {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  font: 300 clamp(40px, 3.6vw, 58px) / 0.92 var(--serif);
+  font-variation-settings: 'opsz' 144, 'SOFT' 40, 'WONK' 1;
+  font-style: italic;
+  letter-spacing: -0.03em;
+}
+
+.system .drawably-badge,
+.repository .drawably-badge {
+  padding: 5px 11px;
+  font: 600 12px/1.5 var(--mono);
+  font-style: normal;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.law {
+  margin: 12px 0 0;
+  font: italic 360 15.5px/1.4 var(--serif);
+  font-variation-settings: 'SOFT' 100;
+  color: var(--pencil);
+  max-width: 19em;
+}
+
 .examples {
   display: flex;
   flex-wrap: wrap;
@@ -379,27 +535,142 @@ h1 .spark {
   text-decoration-color: var(--accent);
 }
 
-.error {
-  margin-top: 26px;
+/* An example already charted is struck through with the marker; one being scanned waits in pencil. */
+.examples a[data-state='charted'] {
+  text-decoration: none;
+  background: linear-gradient(transparent 46%, color-mix(in srgb, var(--marker) 70%, transparent) 46% 88%, transparent 88%);
+}
+
+.examples a[data-state='scanning'] {
+  color: var(--pencil);
+}
+
+.examples a[data-state='lost'] {
   color: var(--accent);
-  font: 500 14px/1.45 var(--mono);
-  width: auto;
+  text-decoration-line: line-through;
+}
+
+.examples .all {
+  border: 0;
+  padding: 0 0 1px;
+  background: none;
+  font: 400 19px/1 var(--pen);
+  color: var(--accent);
+  cursor: pointer;
+  border-bottom: 1.5px solid currentColor;
+}
+
+.examples .all:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ---- an index: of the worlds of the system, or of the skills of a world ------------------------ */
+
+.index {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  margin-top: 14px;
+}
+
+.index ul {
+  flex: 1;
+  list-style: none;
+  margin: 0 -8px 0 -10px;
+  padding: 4px 8px 12px 0;
+  overflow-y: auto;
+  counter-reset: entry;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--ink-rgb) / 0.3) transparent;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 22px), transparent 100%);
+}
+
+.index li {
+  counter-increment: entry;
+  animation: rise 500ms var(--ease) both;
+  animation-delay: calc(120ms + var(--i) * 38ms);
+}
+
+.index button {
+  position: relative;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  width: 100%;
+  padding: 9px 10px 10px 10px;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  outline: none;
+}
+
+.index button::before {
+  content: counter(entry, decimal-leading-zero);
+  grid-row: 1 / span 3;
+  padding-top: 7px;
+  font: italic 340 13px/1 var(--serif);
+  font-variant-numeric: tabular-nums;
+  color: var(--pencil);
+}
+
+.index button > * {
+  grid-column: 2;
+  min-width: 0;
+}
+
+.index button strong {
+  justify-self: start;
   max-width: 100%;
-  align-items: baseline;
+  font: 400 25px/1.12 var(--pen);
+  overflow-wrap: anywhere;
+  opacity: 0.86;
+  transition: opacity 160ms ease;
+}
+
+.index button span:not(.drawably-circle) {
+  margin-top: 3px;
+  font: 380 14px/1.36 var(--serif);
+  color: rgb(var(--ink-rgb) / 0.8);
+}
+
+.index button code {
+  margin-top: 4px;
+  font: 400 10.5px/1.4 var(--mono);
+  color: var(--pencil);
   overflow-wrap: anywhere;
 }
 
-.error [data-tag] {
-  flex: none;
-  white-space: nowrap;
-  padding: 3px 9px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-size: 11px;
+.index button:is(:hover, :focus-visible, [data-pointed]) strong,
+.index button[aria-current='true'] strong {
+  opacity: 1;
 }
 
-/* ---- the globe's place on the page; the globe itself is on the canvas -------------------------- */
+/* Under the pointer, here or on the sky: a swipe of the marker. */
+.index button:is(:hover, :focus-visible, [data-pointed]):not([aria-current='true']) strong {
+  background: linear-gradient(transparent 58%, color-mix(in srgb, var(--marker) 62%, transparent) 58% 92%, transparent 92%);
+}
+
+.index button:focus-visible {
+  box-shadow: inset 0 0 0 1.5px rgb(var(--ink-rgb) / 0.55);
+}
+
+.index button[aria-current='true']::before {
+  content: '✦';
+  font: 400 15px/1 var(--serif);
+  padding-top: 6px;
+  color: var(--accent);
+}
+
+/* What is written lies over the stage, where the two meet: a click on a button is the button's. */
+.masthead,
+.register {
+  position: relative;
+  z-index: 2;
+}
+
+/* ---- the stage: where the eye looks from; the sky itself is on the canvas ---------------------- */
 
 .globe {
   position: relative;
@@ -444,7 +715,8 @@ h1 .spark {
 .hint,
 .legend {
   position: absolute;
-  left: 50%;
+  /* In the middle of what shows of the stage: not under the sheet. */
+  left: calc(50% - var(--under, 0px) / 2);
   bottom: 0;
   transform: translateX(-50%);
   margin: 0;
@@ -473,12 +745,13 @@ h1 .spark {
   justify-content: center;
   gap: 7px;
   width: max-content;
-  max-width: 100%;
+  max-width: calc(100% - var(--under, 0px));
   white-space: normal;
   font: 500 9.5px/1 var(--mono);
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--pencil);
+  opacity: clamp(0, (var(--zoom) - 0.6) * 3, 1);
 }
 
 .legend .mark {
@@ -492,8 +765,9 @@ h1 .spark {
   margin-left: 0;
 }
 
-.legend .star {
+.legend .place {
   background: var(--ink);
+  box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px var(--ink);
 }
 
 .legend .copy {
@@ -516,28 +790,11 @@ h1 .spark {
   display: none;
 }
 
-.plate[data-view='chart'] .hint {
-  bottom: 24px;
-  font-size: 16px;
-}
-
-/* On the cover it is a pencil note, at the globe's lower left. */
-.plate[data-view='cover'] .hint {
-  left: -5%;
-  bottom: 7%;
-  transform: rotate(-5deg);
-}
-
-.plate[data-view='chart'] .legend + .hint,
-.plate[data-view='chart'] .hint:has(+ .legend) {
-  display: none;
-}
-
 /* A note in the margin of the cover, and the arrow from it to the sky. */
 .note {
   position: absolute;
-  left: 2%;
-  top: 9%;
+  left: 9%;
+  top: 6%;
   margin: 0;
   font: 400 23px/1.05 var(--pen);
   color: var(--accent);
@@ -548,8 +805,8 @@ h1 .spark {
 
 .note-target {
   position: absolute;
-  left: 27%;
-  top: 27%;
+  left: 33%;
+  top: 25%;
   width: 1px;
   height: 1px;
 }
@@ -558,22 +815,48 @@ h1 .spark {
   transition: opacity 600ms ease 1.6s;
 }
 
-/* ---- the cover: nothing scanned yet ------------------------------------------------------------ */
+/* The law of the system, pencilled in the middle of the plate. */
+.law-note {
+  position: absolute;
+  left: 57%;
+  top: 51%;
+  margin: 0;
+  font: 400 16px/1.1 var(--pen);
+  text-align: center;
+  color: var(--pencil);
+  transform: translate(-50%, -50%) rotate(-3deg);
+  pointer-events: none;
+  opacity: clamp(0, 1 - var(--zoom) * 3, 1);
+}
+
+:root:not([data-sky='drawn']) .law-note {
+  display: none;
+}
+
+/* ---- the cover: nothing charted yet ------------------------------------------------------------ */
 
 .plate[data-view='cover'] main {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.02fr);
-  align-items: center;
-  column-gap: 3vw;
+  grid-template-columns: minmax(0, 0.84fr) minmax(0, 1.16fr);
+  grid-template-rows: 1fr auto auto 1.1fr;
+  column-gap: 2vw;
 }
 
 .plate[data-view='cover'] .masthead {
+  grid-column: 1;
+  grid-row: 2;
   max-width: 700px;
-  padding-bottom: 2vh;
+  opacity: clamp(0, 1 - var(--zoom) * 2.4, 1);
+}
+
+.plate[data-view='cover'] .register {
+  grid-column: 1;
+  grid-row: 3;
+  max-width: 640px;
 }
 
 .plate[data-view='cover'] h1 {
-  font-size: clamp(5.5rem, 13.2vw, 13.6rem);
-  margin-left: -0.04em;
+  font-size: clamp(6.5rem, 16.4vw, 17.5rem);
+  margin-left: -0.05em;
 }
 
 .plate[data-view='cover'] h1 .word {
@@ -581,20 +864,20 @@ h1 .spark {
 }
 
 .plate[data-view='cover'] h1 .word + .word {
-  margin-left: 0.42em;
-  margin-top: 0.02em;
+  margin-left: 0.3em;
+  margin-top: -0.04em;
 }
 
 .plate[data-view='cover'] h1 .spark {
-  right: -0.02em;
-  top: 0.06em;
-  width: 0.26em;
-  height: 0.26em;
+  right: -0.1em;
+  top: 0.02em;
+  width: 0.2em;
+  height: 0.2em;
   transform: rotate(12deg);
 }
 
 .plate[data-view='cover'] .tagline {
-  margin: 30px 0 34px;
+  margin: 40px 0 30px;
   font-size: clamp(1.25rem, 1.9vw, 1.75rem);
 }
 
@@ -602,16 +885,22 @@ h1 .spark {
   max-width: 600px;
 }
 
+/* The system takes the rest of the page, to its edges. */
 .plate[data-view='cover'] .globe {
-  align-self: stretch;
-  justify-self: center;
-  /* As wide as leaves room under the globe for its shadow. */
-  width: min(100% + 40px, (100dvh - 34px) / 1.38);
-  min-height: min(76vh, 760px);
-  margin: -30px -40px -36px -2vw;
+  grid-column: 2;
+  grid-row: 1 / -1;
+  margin: -44px -64px -52px -9vw;
 }
 
-.plate[data-view='cover'] .masthead > * {
+.plate[data-view='cover'] .hint {
+  left: auto;
+  right: 9%;
+  bottom: 7%;
+  transform: rotate(-4deg);
+}
+
+.plate[data-view='cover'] .masthead > *,
+.plate[data-view='cover'] .register {
   animation: rise 800ms var(--ease) both;
 }
 
@@ -623,11 +912,11 @@ h1 .spark {
   animation-delay: 200ms;
 }
 
-.plate[data-view='cover'] .masthead > :nth-child(4) {
+.plate[data-view='cover'] .masthead > :nth-child(n + 4) {
   animation-delay: 300ms;
 }
 
-.plate[data-view='cover'] .masthead > :nth-child(n + 5) {
+.plate[data-view='cover'] .register {
   animation-delay: 400ms;
 }
 
@@ -638,9 +927,9 @@ h1 .spark {
   }
 }
 
-/* The title is written, a word at a time. */
+/* The title is set, a word at a time. */
 .plate[data-view='cover'] h1 .word {
-  animation: write 950ms cubic-bezier(0.5, 0, 0.2, 1) 150ms both;
+  animation: write 1100ms cubic-bezier(0.5, 0, 0.2, 1) 150ms both;
 }
 
 .plate[data-view='cover'] h1 .word + .word {
@@ -648,74 +937,132 @@ h1 .spark {
 }
 
 .plate[data-view='cover'] h1 .spark {
-  animation: rise 500ms var(--ease) 1300ms both;
+  animation: rise 500ms var(--ease) 1400ms both;
 }
 
 @keyframes write {
   from {
     clip-path: inset(-20% 100% -20% -10%);
+    letter-spacing: 0.06em;
   }
   to {
     clip-path: inset(-20% -10% -20% -10%);
   }
 }
 
-/* ---- the chart: a repository scanned ----------------------------------------------------------- */
+/* ---- the system and a world: the title in a line across the top -------------------------------- */
 
-.plate[data-view='chart'] main {
+.plate:is([data-view='system'], [data-view='world']) main {
   height: 100dvh;
   padding: 26px 44px 44px 62px;
-  grid-template-columns: clamp(270px, 21vw, 380px) minmax(0, 1fr) clamp(400px, 32vw, 580px);
   grid-template-rows: auto minmax(0, 1fr);
   gap: 16px 26px;
 }
 
-.plate[data-view='chart'] .masthead {
+.plate:is([data-view='system'], [data-view='world']) .masthead {
   grid-column: 1 / -1;
   grid-row: 1;
   display: flex;
   align-items: center;
-  gap: 22px;
+  flex-wrap: wrap;
+  gap: 8px 22px;
   padding-right: 118px;
   min-width: 0;
   animation: rise 600ms var(--ease) both;
 }
 
-.plate[data-view='chart'] .eyebrow {
+.plate:is([data-view='system'], [data-view='world']) .eyebrow {
   display: none;
 }
 
-.plate[data-view='chart'] h1 {
-  font-size: 2.6rem;
+.plate:is([data-view='system'], [data-view='world']) h1 {
+  font-size: 2.9rem;
   line-height: 1;
+  letter-spacing: -0.035em;
   white-space: nowrap;
-  padding-right: 0.5em;
+  padding-right: 0.42em;
   flex: none;
 }
 
-.plate[data-view='chart'] h1 .spark {
+.plate:is([data-view='system'], [data-view='world']) h1 .spark {
   right: 0;
-  top: -0.08em;
-  width: 0.42em;
-  height: 0.42em;
+  top: -0.02em;
+  width: 0.36em;
+  height: 0.36em;
 }
 
-.plate[data-view='chart'] .tagline {
+.plate:is([data-view='system'], [data-view='world']) .tagline {
   flex: none;
   font-size: 15px;
   color: var(--pencil);
 }
 
-.plate[data-view='chart'] .scan {
+.plate:is([data-view='system'], [data-view='world']) .scan {
   flex: 1;
   min-width: 0;
   max-width: 640px;
   margin-left: auto;
 }
 
-.plate[data-view='chart'] .globe {
+.plate:is([data-view='system'], [data-view='world']) .error {
+  flex: 1 1 100%;
+  margin-top: 4px;
+}
+
+/* The system: its register to the left, the plate over the rest of the page. */
+.plate[data-view='system'] main {
+  grid-template-columns: clamp(290px, 25vw, 420px) minmax(0, 1fr);
+}
+
+.plate[data-view='system'] .register {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.plate[data-view='system'] .register section {
+  flex: 0 1 auto;
+}
+
+.plate[data-view='system'] .examples {
+  flex: none;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgb(var(--ink-rgb) / 0.16);
+  font-size: 15px;
+}
+
+.plate[data-view='system'] .globe {
   grid-column: 2;
   grid-row: 2;
+  margin: 0 -44px -44px -3vw;
+}
+
+.plate[data-view='system'] .hint {
+  left: auto;
+  right: 8%;
+  bottom: 60px;
+  transform: rotate(-4deg);
+  font-size: 17px;
+  opacity: clamp(0, 1 - var(--zoom) * 3, 1);
+}
+
+/* A world: its index to the left, its map in the middle, the chosen skill's sheet to the right. */
+.plate[data-view='world'] main {
+  grid-template-columns: clamp(270px, 21vw, 380px) minmax(0, 1fr) clamp(400px, 32vw, 580px);
+}
+
+/* The world is larger than the room between the index and the sheet: it runs under the sheet. */
+.plate[data-view='world'] .globe {
+  grid-column: 2;
+  grid-row: 2;
+  margin-right: -76px;
+  --under: 76px;
+  --bleed: 1.07;
+}
+
+.plate[data-view='world'] .hint {
+  bottom: 24px;
+  font-size: 16px;
 }
 
 .result {
@@ -727,8 +1074,15 @@ h1 .spark {
   pointer-events: none;
 }
 
+/* What is known of a world comes as the eye does. */
 .result > * {
   pointer-events: auto;
+  opacity: clamp(0, (var(--zoom) - 0.4) * 2.4, 1);
+}
+
+:root:not([data-sky='drawn']) :is(.result > *, .register, .masthead, .legend) {
+  opacity: 1;
+  transform: none;
 }
 
 .ledger {
@@ -737,7 +1091,7 @@ h1 .spark {
   flex-direction: column;
   min-height: 0;
   min-width: 0;
-  animation: unfold-left 700ms var(--ease) both;
+  transform: translateX(calc((1 - var(--zoom)) * -30px));
 }
 
 @keyframes unfold-left {
@@ -747,41 +1101,108 @@ h1 .spark {
   }
 }
 
+/* Back to the system: a pencil note over the world's name. */
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  align-self: flex-start;
+  margin: 0 0 10px -2px;
+  padding: 2px 4px 3px;
+  border: 0;
+  background: none;
+  font: 500 10px/1 var(--mono);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--pencil);
+  cursor: pointer;
+  border-bottom: 1px dashed rgb(var(--ink-rgb) / 0.35);
+}
+
+.back:is(:hover, :focus-visible) {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  outline: none;
+}
+
+/* The repository: its owner in small capitals, its name as a title. */
 .repository {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 12px;
-  font-size: 30px;
-  line-height: 1.05;
+  gap: 6px 12px;
+  line-height: 1;
 }
 
 .repository a {
-  text-decoration-thickness: 1.5px;
-  text-underline-offset: 5px;
-  text-decoration-color: rgb(var(--ink-rgb) / 0.4);
+  display: grid;
+  text-decoration: none;
   overflow-wrap: anywhere;
 }
 
-.repository a:hover {
+.repository .owner {
+  font: 500 10.5px/1 var(--mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--pencil);
+}
+
+.repository .name {
+  margin-top: 5px;
+  font: italic 320 calc(clamp(38px, 3.5vw, 56px) * max(0.56, var(--fit, 1))) / 0.95 var(--serif);
+  font-variation-settings: 'opsz' 144, 'SOFT' 40, 'WONK' 1;
+  letter-spacing: -0.03em;
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 6px;
+  text-decoration-color: rgb(var(--ink-rgb) / 0.3);
+}
+
+.repository a:hover .name {
   text-decoration-color: var(--accent);
 }
 
-.repository .drawably-badge {
-  padding: 5px 11px;
-  font: 600 12px/1.5 var(--mono);
-  letter-spacing: 0.04em;
-  white-space: nowrap;
+/* The worlds most like this one: a step away. */
+.kin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-top: 12px;
+  font: italic 340 14px/1.5 var(--serif);
+  color: var(--pencil);
 }
 
-/* The warnings keep to their own corner, however many: the index below always has its room. */
+.kin button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 500 11.5px/1.5 var(--mono);
+  font-style: normal;
+  color: var(--ink);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgb(var(--ink-rgb) / 0.35);
+}
+
+.kin button:is(:hover, :focus-visible) {
+  text-decoration-color: var(--accent);
+  outline: none;
+}
+
+.kin b {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* Notes under the repository. However many, they keep to their corner: the index keeps its room. */
 .warnings {
-  flex: none;
-  max-height: 30dvh;
+  flex: 0 1 auto;
+  min-height: 2.6em;
+  max-height: 30%;
   margin-top: 10px;
-  padding-bottom: 6px;
   overflow-y: auto;
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent);
   scrollbar-width: thin;
   scrollbar-color: rgb(var(--ink-rgb) / 0.3) transparent;
 }
@@ -808,106 +1229,7 @@ h1 .spark {
   max-width: 17em;
 }
 
-/* The index of stars. */
-nav {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  margin-top: 14px;
-}
-
-nav ul {
-  flex: 1;
-  list-style: none;
-  margin: 0 -8px 0 -10px;
-  padding: 4px 8px 12px 0;
-  overflow-y: auto;
-  counter-reset: star;
-  scrollbar-width: thin;
-  scrollbar-color: rgb(var(--ink-rgb) / 0.3) transparent;
-  mask-image: linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 22px), transparent 100%);
-}
-
-nav li {
-  counter-increment: star;
-  animation: rise 500ms var(--ease) both;
-  animation-delay: calc(120ms + var(--i) * 38ms);
-}
-
-nav button {
-  position: relative;
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  width: 100%;
-  padding: 9px 10px 10px 10px;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  border-radius: 6px;
-  outline: none;
-}
-
-nav button::before {
-  content: counter(star, decimal-leading-zero);
-  grid-row: 1 / span 3;
-  padding-top: 7px;
-  font: italic 340 13px/1 var(--serif);
-  font-variant-numeric: tabular-nums;
-  color: var(--pencil);
-}
-
-nav button > * {
-  grid-column: 2;
-  min-width: 0;
-}
-
-nav button strong {
-  justify-self: start;
-  max-width: 100%;
-  font: 400 25px/1.12 var(--pen);
-  overflow-wrap: anywhere;
-  opacity: 0.86;
-  transition: opacity 160ms ease;
-}
-
-nav button span:not(.drawably-circle) {
-  margin-top: 3px;
-  font: 380 14px/1.36 var(--serif);
-  color: rgb(var(--ink-rgb) / 0.8);
-}
-
-nav button code {
-  margin-top: 4px;
-  font: 400 10.5px/1.4 var(--mono);
-  color: var(--pencil);
-  overflow-wrap: anywhere;
-}
-
-nav button:is(:hover, :focus-visible, [data-pointed]) strong,
-nav button[aria-current='true'] strong {
-  opacity: 1;
-}
-
-/* Under the pointer, here or on the globe: a swipe of the marker. */
-nav button:is(:hover, :focus-visible, [data-pointed]):not([aria-current='true']) strong {
-  background: linear-gradient(transparent 58%, color-mix(in srgb, var(--marker) 62%, transparent) 58% 92%, transparent 92%);
-}
-
-nav button:focus-visible {
-  box-shadow: inset 0 0 0 1.5px rgb(var(--ink-rgb) / 0.55);
-}
-
-nav button[aria-current='true']::before {
-  content: '✦';
-  font: 400 15px/1 var(--serif);
-  padding-top: 6px;
-  color: var(--accent);
-}
-
-/* The chosen skill's sheet: lying on the atlas, its SKILL.md as scanned. */
+/* The chosen skill's sheet: lying on the atlas, over the edge of the world, its SKILL.md as scanned. */
 .skill {
   grid-column: 3;
   position: relative;
@@ -917,7 +1239,7 @@ nav button[aria-current='true']::before {
   min-width: 0;
   padding: 26px 28px 22px;
   background: var(--sheet);
-  border-radius: 12px;
+  border-radius: 3px;
   box-shadow:
     0 1px 0 rgb(var(--shade) / 0.05),
     0 22px 44px -20px rgb(var(--shade) / 0.42),
@@ -928,7 +1250,6 @@ nav button[aria-current='true']::before {
 
 @keyframes turn-page {
   from {
-    opacity: 0;
     transform: perspective(1400px) rotateY(-34deg) translateX(26px);
   }
   to {
@@ -971,6 +1292,7 @@ nav button[aria-current='true']::before {
   align-items: center;
   gap: 10px;
   margin-top: 8px;
+  font-family: var(--pen);
   /* A long name is written smaller, so it keeps to a line or two. */
   font-size: calc(clamp(32px, 2.9vw, 46px) * max(0.6, var(--fit, 1)));
   line-height: 1;
@@ -1090,21 +1412,25 @@ h1 .drawably-wash {
   stroke-opacity: 0.55;
 }
 
-/* ---- narrower pages: the chart above, the index and the sheet below ---------------------------- */
+/* ---- narrower pages: the sky above, what is written below -------------------------------------- */
 
 @media (max-width: 1100px) {
-  .plate[data-view='chart'] main {
+  .plate:is([data-view='system'], [data-view='world']) main {
     height: auto;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
-    grid-template-rows: auto min(54vh, 460px) auto;
     padding: 26px 34px 60px 52px;
   }
 
-  .plate[data-view='chart'] .masthead {
-    flex-wrap: wrap;
+  .plate[data-view='world'] main {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    grid-template-rows: auto min(54vh, 460px) auto;
   }
 
-  .plate[data-view='chart'] .tagline {
+  .plate[data-view='system'] main {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto min(62vh, 560px) auto;
+  }
+
+  .plate:is([data-view='system'], [data-view='world']) .tagline {
     display: none;
   }
 
@@ -1113,19 +1439,30 @@ h1 .drawably-wash {
     display: none;
   }
 
-  .warnings {
-    max-height: none;
-    overflow: visible;
-    mask-image: none;
+  .plate[data-view='world'] .globe {
+    grid-column: 1 / -1;
+    margin-right: 0;
+    --under: 0px;
+    --bleed: 0.94;
   }
 
-  .plate[data-view='chart'] .globe {
-    grid-column: 1 / -1;
+  .plate[data-view='system'] .globe {
+    grid-column: 1;
+    grid-row: 2;
+    margin: 0 -34px 0 -52px;
+  }
+
+  .plate[data-view='system'] .register {
+    grid-row: 3;
   }
 
   .result {
     grid-row: 3;
     grid-template-columns: subgrid;
+  }
+
+  .ledger {
+    transform: none;
   }
 
   .skill {
@@ -1136,44 +1473,60 @@ h1 .drawably-wash {
     max-height: calc(100dvh - 48px);
   }
 
-  nav ul {
+  .index ul {
     overflow: visible;
     mask-image: none;
+  }
+
+  .warnings {
+    max-height: none;
+    overflow: visible;
   }
 }
 
 @media (max-width: 860px) {
   main,
-  .plate[data-view='chart'] main {
+  .plate:is([data-view='system'], [data-view='world']) main {
     padding: 64px 26px 56px 30px;
   }
 
   .plate[data-view='cover'] main {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
     align-content: start;
     row-gap: 8px;
   }
 
+  .plate[data-view='cover'] :is(.masthead, .register) {
+    grid-row: auto;
+  }
+
   .plate[data-view='cover'] h1 {
-    font-size: clamp(4.6rem, 25vw, 9rem);
+    font-size: clamp(5rem, 29vw, 10rem);
   }
 
   .plate[data-view='cover'] .globe {
-    min-height: min(92vw, 520px);
-    margin: 0 -12px;
+    grid-column: 1;
+    grid-row: auto;
+    min-height: min(96vw, 560px);
+    margin: 12px -26px 0 -30px;
   }
 
-  .plate[data-view='chart'] main {
+  .plate[data-view='world'] main {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto min(88vw, 440px) auto;
   }
 
-  .plate[data-view='chart'] .masthead {
+  .plate[data-view='system'] .globe {
+    margin: 0 -26px 0 -30px;
+  }
+
+  .plate:is([data-view='system'], [data-view='world']) .masthead {
     padding-right: 0;
     gap: 14px;
   }
 
-  .plate[data-view='chart'] .scan {
+  .plate:is([data-view='system'], [data-view='world']) .scan {
     flex: 1 1 100%;
     max-width: none;
   }
@@ -1200,7 +1553,6 @@ h1 .drawably-wash {
   .skill pre {
     max-height: 70vh;
   }
-
 
   .neatline {
     inset: 7px;
