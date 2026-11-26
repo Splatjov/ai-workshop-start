@@ -40,3 +40,9 @@ test('every screenshot of the walkthrough has a reviewed baseline', () => {
     assert.ok(existsSync(root(`tests/web/__screenshots__/walkthrough.spec.ts/${name}.png`)), `no baseline for ${name}`);
   }
 });
+
+test('every web test records a video, and the screenshots are compared only with SCREENSHOTS set', () => {
+  const config = read('playwright.config.ts');
+  assert.match(config, /^\s*video: 'on',$/m);
+  assert.match(config, /^\s*ignoreSnapshots: !process\.env\.SCREENSHOTS,$/m);
+});
