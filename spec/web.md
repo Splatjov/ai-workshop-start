@@ -14,7 +14,8 @@ controls and [@sketchyicons/react](https://www.npmjs.com/package/@sketchyicons/r
 - An unreachable repository, an unknown ref, a non-GitHub link → the CLI's message, as an alert
 - No `SKILL.md` → `0 skills`, nothing to choose
 - Examples, under the field: `anthropics/skills`, `obra/superpowers`, `vercel-labs/agent-skills`,
-  `openai/codex`, `JetBrains/kotlin`, `JetBrains/koog`, each a link to `?repo=<its URL>`;
+  `openai/codex`, `huggingface/skills`, `trailofbits/skills`, `getsentry/skills`,
+  `JetBrains/kotlin`, `JetBrains/koog`, each a link to `?repo=<its URL>`;
   clicking one puts its URL in the field and scans it; Ctrl/Cmd-, Shift- and middle-click open it
   in a new tab or window, as any link
 - A scan started while another runs wins: only the latest scan's result is shown

@@ -144,7 +144,7 @@ test('?repo=<URL> scans at once; scanning writes it to the address', async ({ pa
   await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/empty 0 skills');
 });
 
-test('examples: six repositories with skills, each a link that fills the field and scans it', async ({ page }) => {
+test('examples: nine repositories with skills, each a link that fills the field and scans it', async ({ page }) => {
   await page.goto('./');
   const examples = page.getByRole('navigation', { name: 'Examples' }).getByRole('link');
   await expect(examples).toHaveText([
@@ -152,6 +152,9 @@ test('examples: six repositories with skills, each a link that fills the field a
     'obra/superpowers',
     'vercel-labs/agent-skills',
     'openai/codex',
+    'huggingface/skills',
+    'trailofbits/skills',
+    'getsentry/skills',
     'JetBrains/kotlin',
     'JetBrains/koog',
   ]);

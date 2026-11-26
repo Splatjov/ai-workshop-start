@@ -21,6 +21,9 @@ export const EXAMPLES = [
   'obra/superpowers',
   'vercel-labs/agent-skills',
   'openai/codex',
+  'huggingface/skills',
+  'trailofbits/skills',
+  'getsentry/skills',
   'JetBrains/kotlin',
   'JetBrains/koog',
 ] as const;
