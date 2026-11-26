@@ -225,6 +225,10 @@ npx playwright test -c /tmp/rv/pw.config.ts 2>&1 | grep -E 'RELEASE|NEW TAB|pass
   - Delete or ignore `/tmp/rv`; never add the probe to the repository.
 - A confirmed bug the tests missed: say which test would have caught it (one line), so the fix
   comes with its test.
+- A test added to fix an earlier finding (or any new test of a spec case): check it can fail.
+  Break the behaviour in the code for a moment (e.g. `onAuxClick={(e) => e.preventDefault()}` on
+  the link for middle-click), run only that test (`npx playwright test <file> -g "<title>"`), see
+  it fail, restore the file (`git diff --exit-code` after). Report it under "Checked, no problem".
 - Drop anything you can't back with a concrete failure scenario. Mark the rest
   **confirmed** (reproduced) or **plausible** (reasoned, not reproduced).
 
@@ -295,6 +299,9 @@ With `--comment` and a PR target:
     instead of a second full report: the new sha, that the product code is unchanged since
     `<old sha>` (`git diff --stat <old>..<new>`) so that review stands, CI on the new sha, and only
     what is new (e.g. a finding about the skill itself).
+  - A report for an older head, and since then only a small fix of its findings (e.g. the missing
+    test added) → also a short comment: the new sha, which findings it fixes and how you checked
+    the fix, the checks and CI on the new sha, and that the rest of the earlier review stands.
   - Otherwise a new report, naming the earlier findings that are now fixed.
 - Changing this skill in the same run (when asked to): fetch the branch and fast-forward first,
   since another run may have pushed its own edits; add to them, don't redo them.
