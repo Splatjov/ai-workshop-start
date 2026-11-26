@@ -58,6 +58,9 @@ for the rest. It often merges while this run works: re-check (`gh pr view <m> --
 re-fetch `origin/<base>` before reporting; once merged, the plain `origin/<base>...HEAD` diff is
 just this PR's own commits. Name in the report what you reviewed (`<sha> only, #m merged`).
 
+Notes in `memory/` (`.claude/skills/update-memory/SKILL.md`) are never reviewed: leave them out
+of the diff you read, raise no finding about them, and don't count them in the definition of done.
+
 Agent tooling under `.claude/` (skills, `.claude/automations/`) may be part of the diff: review it
 as documentation (does it match the repository, do its commands run, does it keep the rules of
 `.claude/automations/README.md`?), not as product code. Follow the skill as it is on the base

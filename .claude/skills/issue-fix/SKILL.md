@@ -125,7 +125,8 @@ weakening a test or the spec.
 
 ## 6. Open the pull request
 
-Commits in the repository's style (`git log --oneline -15`), only the files of the change
+What this run learned goes in a note first (`.claude/skills/update-memory/SKILL.md`), committed on
+the branch with the change. Commits in the repository's style (`git log --oneline -15`), only the files of the change
 (`git add <paths>`, never `-A`), `git status --porcelain` empty afterwards. Push the branch, then:
 
 ```bash
