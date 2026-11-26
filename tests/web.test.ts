@@ -136,6 +136,23 @@ test('scan: the token messages name the GitHub token field, not GITHUB_TOKEN', a
   });
 });
 
+test('scan: a tree too large to list, without a token → the warning names the GitHub token field, not GITHUB_TOKEN', async () => {
+  const api = 'https://api.github.com/repos/JetBrains/huge';
+  const huge = createBrowserBackend({
+    fetch: replay({
+      [api]: { status: 200, body: { full_name: 'JetBrains/huge', default_branch: 'main' } },
+      [`${api}/commits/main`]: { status: 200, body: { sha: COMMIT } },
+      [`${api}/git/trees/${COMMIT}?recursive=1`]: { status: 200, body: { truncated: true, tree: [] } },
+      [`${api}/git/trees/${COMMIT}`]: { status: 200, body: { truncated: false, tree: [] } },
+    }),
+  });
+  const view = await huge.scan('https://github.com/JetBrains/huge');
+  assert.ok('skills' in view, JSON.stringify(view));
+  assert.deepEqual(view.warnings, [
+    'the tree is too large to list at once; looked only in .agents/skills, .claude/skills, .github/skills, agent/skills (the GitHub token field searches everywhere)',
+  ]);
+});
+
 test('scan: an organization → its repositories with skills, by id, each SKILL.md as scanned, warnings named', async () => {
   for (const token of [undefined, 'secret']) {
     const view = await backend.scan('https://github.com/atlas-org', { token });

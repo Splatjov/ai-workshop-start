@@ -13,10 +13,13 @@ export type GitHubOptions = {
   tokenSource?: TokenSource;
 };
 
-/** `name`: "GitHub rejected the token in <name>"; `set`: "GitHub rate limit reached; <set>". */
-export type TokenSource = { name: string; set: string };
+/**
+ * `name`: "GitHub rejected the token in <name>"; `set`: "GitHub rate limit reached; <set>";
+ * `search`: the hint of the warning for a tree too large to list without a token.
+ */
+export type TokenSource = { name: string; set: string; search: string };
 
-const ENVIRONMENT: TokenSource = { name: 'GITHUB_TOKEN', set: 'set GITHUB_TOKEN' };
+const ENVIRONMENT: TokenSource = { name: 'GITHUB_TOKEN', set: 'set GITHUB_TOKEN', search: 'GITHUB_TOKEN searches everywhere' };
 
 const API = 'https://api.github.com';
 const RAW = 'https://raw.githubusercontent.com';
@@ -65,7 +68,7 @@ async function openRepository(github: Client, info: RepositoryInfo, ref: string 
     ? 'code search sees only the default branch'
     : options.token
       ? 'code search does not cover this repository'
-      : 'GITHUB_TOKEN searches everywhere';
+      : (options.tokenSource ?? ENVIRONMENT).search;
   const paths = search ? await searchPaths(github, id) : await treePaths(github, id, sha, warnings, hint);
   return source(github, id, sha, paths, warnings);
 }

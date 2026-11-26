@@ -29,7 +29,11 @@ export type ScanOptions = {
 };
 
 /** The page has no environment: its messages name the field the token is typed into. */
-const TOKEN_FIELD: TokenSource = { name: 'the GitHub token field', set: 'fill in the GitHub token field' };
+const TOKEN_FIELD: TokenSource = {
+  name: 'the GitHub token field',
+  set: 'fill in the GitHub token field',
+  search: 'the GitHub token field searches everywhere',
+};
 
 export function createBrowserBackend(options: BrowserOptions = {}) {
   const live = options.fetch ?? ((url, init) => fetch(url, init));
