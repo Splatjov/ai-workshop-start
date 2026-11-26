@@ -98,6 +98,9 @@ In this order of importance:
    - Facts the change asserts about the outside world (example repositories, URLs, counts):
      check them for real, e.g. `timeout 60 ./skill-atlas scan <URL> | head -1` for each listed
      repository (with `GITHUB_TOKEN`), and say which ones you checked and what they returned.
+     Without a token GitHub allows 60 API requests an hour per IP (~20 scans), shared with
+     everything else on the runner: `GitHub rate limit reached` then is the environment, not the
+     change. Rerun with the token before reporting anything.
    - A bug in old code that the change **newly makes reachable** (e.g. a race in `scan()` that was
      guarded by the disabled button, now reachable through a new link) is the change's finding:
      anchor it at the new code, not the old.
@@ -198,7 +201,11 @@ npx playwright test -c /tmp/rv/pw.config.ts 2>&1 | grep -E 'RELEASE|NEW TAB|pass
     repository, the 2nd one; otherwise the stale 1st scan won. `BEFORE RELEASE` shows the 2nd
     result while the 1st scan is still held: a `button` of `Scan` there means the loading state
     ended while a scan is still running. Both are symptoms of one unguarded `scan()` (one finding),
-    unless the fix cancels the 1st scan on purpose, in which case `Scan` there is correct.
+    unless the code cancels or drops the 1st scan on purpose (e.g. a "latest scan" counter that
+    discards an older result): then nothing on screen waits for the 1st scan and `Scan` there is
+    correct. Read `scan()` to tell which.
+    Submit and Enter while a scan runs do nothing when the button is disabled: that is the
+    loading state working, not a lost scan.
     Don't replace the hold with a fixed delay: a scan is ~4 sequential requests, so "delay each
     answer 800 ms, wait 2.5 s" ends before the slow scan does and reports a false "no race".
   - New tab: report which of ctrl/cmd, shift and middle-click open one. Middle-click fires no
@@ -216,6 +223,9 @@ npx playwright test -c /tmp/rv/pw.config.ts 2>&1 | grep -E 'RELEASE|NEW TAB|pass
 Severity: **important** — a user can hit it, or it breaks the spec, a claim of the PR or the
 definition of done. **nit** — real but minor (a weak test, an inconsistency with no visible effect).
 Don't inflate: a test that checks one of six items where the spec says "each" is a nit, not important.
+Likewise a spec case that has a test, but one of whose clauses isn't asserted (e.g. "Ctrl/Cmd-,
+Shift- and middle-click" with a test for only the first two), is a nit when you checked by hand
+that the clause works; it is important when the clause is broken.
 
 Symptoms of one root cause are one finding (e.g. a stale result winning *and* the button going idle
 too early both come from an unguarded `scan()`): list the symptoms in it, fix once.
@@ -251,17 +261,20 @@ Print a markdown report:
 
 Order findings by severity. Line numbers are of the file at the reviewed head.
 Verdict: ❌ if a check fails or CI fails on the code, or the definition of done is missing (spec
-not updated, no test for a new spec case); ⚠️ if any `important` finding; ✅ otherwise (nits only,
+not updated, a new spec case with no test at all); ⚠️ if any `important` finding; ✅ otherwise (nits only,
 or nothing). CI red only from infrastructure doesn't set the verdict, but say so in it ("✅ ready
 once CI's rerun is green").
 Tick a definition-of-done box only for what you checked; write `(CI pending)` or `(CI red:
-infrastructure, rerun <link>)` rather than ticking.
+infrastructure, rerun <link>)` rather than ticking. A box met except for a nit is ticked with the
+gap named: `- [x] integration test for every spec case touched (except middle-click, nit 1)`.
 
 With `--comment` and a PR target:
 - Post each finding with a file/line **inside the diff** as an inline review comment on the PR's
   head commit:
   `gh api repos/{owner}/{repo}/pulls/<n>/comments -f body=... -f commit_id=<head sha> -f path=... -F line=... -f side=RIGHT`
   A line outside the diff can't take an inline comment: keep that finding in the summary only.
+  When the caller asks for one PR comment only ("just a PR comment"), skip inline comments:
+  everything goes in the report, with `path:line` links.
 - Post the full report once as a PR comment: `gh pr comment <n> --body-file <report.md>`
 - Never approve or request changes, never merge, never close.
 - Before posting, check existing comments (`gh api repos/{owner}/{repo}/pulls/<n>/comments` and
