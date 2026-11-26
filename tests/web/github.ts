@@ -1,6 +1,6 @@
 // GitHub for the web view's tests: answered from tests/web/recording.ts, never from the network.
 import { expect, type BrowserContext, type Locator, type Page } from '@playwright/test';
-import { ink } from './in-page.js';
+import { ink, typeLoaded } from './in-page.js';
 import { RECORDING } from './recording.ts';
 
 export type Recorded = {
@@ -65,6 +65,7 @@ export const worldButtons = (page: Page) => page.getByRole('navigation', { name:
  * a point there, placed by the engine a frame or more after the page wrote it.
  */
 export async function where(page: Page, named: Locator): Promise<{ x: number; y: number }> {
+  await page.evaluate(typeLoaded); // the page is laid out as it will stay
   await expect(named).toHaveAttribute('style', /translate3d/);
   let last = await named.boundingBox();
   await expect

@@ -61,7 +61,7 @@ site in `web/dist`.
   the next scan
 ## A world
 - Engraved, in pen on paper: its sea in lines that swell where the light does not reach, its lands
-  washed with the marker; it hides what is behind it, and its lines *boil* as drawably's do
+  washed with the marker; its lines *boil* as drawably's do
 - Every skill is a **place**, with its name beside it; the longer its `SKILL.md`, the higher it
   stands, in contours. A copy is a ring beside its skill
 - The directory that holds the skills' folders is their **land**: its places stand on it, roads

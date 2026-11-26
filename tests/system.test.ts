@@ -61,6 +61,33 @@ test('how alike is the same from either side, and is told from the skills’ wor
   assert.ok(kinship([COMMITS], [namesake]).likeness > kinship([COMMITS], [BAKING]).likeness);
 });
 
+test('a skill’s name weighs most, then its description, then the rest of its SKILL.md', () => {
+  const told = skill('migrations', 'Write a database migration.', 'Never edit one that was merged.');
+  const alike = (other: SkillView) => kinship([told], [other]).likeness;
+  const byName = alike(skill('migrations', 'Plan a picnic.', 'Pack sandwiches and lemonade.'));
+  const byDescription = alike(skill('picnic', 'Write a database migration.', 'Pack sandwiches and lemonade.'));
+  const byTheRest = alike(skill('picnic', 'Plan an outing.', 'Never edit one that was merged.'));
+  assert.ok(byName > 0 && byDescription > 0 && byTheRest > 0);
+  // One word in the name tells more than one in the description, and that more than one in the rest.
+  const word = (name: string, description: string, body: string) => kinship([skill('alpha', 'beta', 'gamma')], [skill(name, description, body)]).likeness;
+  assert.ok(word('alpha', 'other', 'another') > word('zeta', 'alpha', 'another'), 'the name over the description');
+  assert.ok(word('zeta', 'alpha', 'another') > word('zeta', 'other', 'alpha'), 'the description over the rest');
+});
+
+test('a word tells more the fewer of the two repositories’ skills say it', () => {
+  // In each repository one skill is about a word the other two never say, and two are about a word all four of those say.
+  const about = (name: string, own: string) => skill(name, `All about ${name}.`, own);
+  const one = [about('rare', 'kettle'), about('common', 'lantern'), about('common', 'marble')];
+  const other = [about('rare', 'nutmeg'), about('common', 'orchid'), about('common', 'pebble')];
+  const { twins } = kinship(one, other);
+  const rare = twins.find((twin) => twin.a === 'rare');
+  const common = twins.find((twin) => twin.a === 'common');
+  assert.ok(rare && common, JSON.stringify(twins));
+  assert.equal(rare.b, 'rare');
+  assert.equal(common.b, 'common');
+  assert.ok(rare.likeness > common.likeness + 0.05, `${rare.likeness} against ${common.likeness}`);
+});
+
 test('a world is the larger, the more skills its repository has', () => {
   assert.ok(radiusOf(0) > 0.05, 'a world with no skills is still there');
   assert.ok(radiusOf(0) < radiusOf(4) && radiusOf(4) < radiusOf(30) && radiusOf(30) < radiusOf(100));

@@ -16,9 +16,10 @@ build-tools-bump-gradle-api — Bumps the Gradle API version that Kotlin Gradle 
 Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests; `npm run test:e2e`, the end-to-end ones on real repositories.
 A `/tree/<commit>` URL scans that commit: `./skill-atlas scan https://github.com/JetBrains/koog/tree/709079e`.
 
-In the browser: `npm run web` opens a celestial atlas, drawn by hand: a field for the repository
-link, its skills as the stars of a globe you can turn, and each one's `SKILL.md`, with nine example
-repositories one click away; `npm run test:web`
+In the browser: `npm run web` opens an atlas of worlds, drawn by hand. Every repository you scan is
+a world of a system, and the more alike the skills of two repositories, the closer their worlds
+stand; nine example repositories wait on the rim, one click away. Zoom into a world for its map: a
+land for every directory, a place for every skill, and each one's `SKILL.md`. `npm run test:web`
 clicks through it in Chromium.
 
 - [spec/](spec/): what it does. [AGENTS.md](AGENTS.md): the definition of done.

@@ -3,7 +3,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { EXAMPLES } from '../../web/examples.ts';
 import { address, chosen, recorded, rested, scan, sky, where, world, worldButtons, type Recorded } from './github.ts';
-import { ink } from './in-page.js';
+import { ink, pageScrolls, scrollToTop, scrolled, twoFingersApart } from './in-page.js';
 import { OTHER_EXAMPLES } from './recording.ts';
 
 let requests: string[];
@@ -169,6 +169,29 @@ test('the wheel goes nearer to the world under the pointer, and back; so do Esca
   await expect(system(page)).toHaveText('The system 2 worlds');
 });
 
+test('where the page itself scrolls, the wheel is the page’s; two fingers still go nearer', async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 640 });
+  await page.goto(address(['JetBrains/many'], '&view=system'));
+  await expect(system(page)).toHaveText('The system 1 world');
+  await expect(sky(page)).toHaveAttribute('data-rest', '');
+  expect(await page.evaluate(pageScrolls)).toBe(true);
+
+  const many = (await world(page, 'jetbrains/many').boundingBox())!;
+  await page.mouse.move(many.x, many.y);
+  await page.mouse.wheel(0, -240); // nearer, were the wheel the sky's: it is not
+  await page.mouse.wheel(0, 240);
+  await expect.poll(() => page.evaluate(scrolled)).toBeGreaterThan(100);
+  await expect(system(page)).toHaveText('The system 1 world');
+  await expect(sky(page)).toHaveAttribute('data-view', 'system');
+
+  // Two fingers apart on a trackpad come as a wheel with Ctrl held: that is the sky's, wherever it is.
+  await page.evaluate(scrollToTop);
+  const at = (await world(page, 'jetbrains/many').boundingBox())!;
+  await page.locator('.globe').evaluate(twoFingersApart, { x: at.x, y: at.y });
+  await expect(system(page)).toHaveText('JetBrains/many 24 skills');
+  await expect(sky(page)).toHaveAttribute('data-view', 'world');
+});
+
 test('the register: clicking a world’s entry goes to it; pointing at an entry marks its world, and at a world its entry', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto(THREE);
@@ -229,6 +252,11 @@ test('chart all: every example is scanned, and the view stays over the system', 
   expect(address.getAll('repo')).toEqual(EXAMPLES.map((id) => `https://github.com/${id}`));
   expect(address.get('view')).toBe('system');
   for (const id of Object.keys(OTHER_EXAMPLES)) expect(requests).toContain(`https://api.github.com/repos/${id}`);
+
+  // At a world of many, the three most alike are a step away, and no more.
+  await worldButtons(page).first().click();
+  await expect(system(page)).toHaveText('anthropics/skills 1 skill');
+  await expect(page.getByRole('navigation', { name: 'Kin' }).getByRole('button')).toHaveCount(3);
 
   // With some charted already, the rest.
   await page.goto('./');

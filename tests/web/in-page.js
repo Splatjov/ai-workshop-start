@@ -72,3 +72,34 @@ export function withoutWebGL() {
     return String(kind).startsWith('webgl') ? null : getContext.call(this, kind, ...rest);
   };
 }
+
+/** Whether the page itself scrolls: it is taller than its window. */
+export function pageScrolls() {
+  return document.documentElement.scrollHeight > window.innerHeight;
+}
+
+/** How far down the page is scrolled, in pixels. */
+export function scrolled() {
+  return window.scrollY;
+}
+
+export function scrollToTop() {
+  window.scrollTo(0, 0);
+}
+
+/**
+ * Two fingers apart on a trackpad, over a point of the sky: the browser tells it as a wheel with
+ * Ctrl held.
+ * @param {Element} slot
+ * @param {{ x: number, y: number }} at
+ */
+export function twoFingersApart(slot, at) {
+  for (let i = 0; i < 4; i++) {
+    slot.dispatchEvent(new WheelEvent('wheel', { deltaY: -40, ctrlKey: true, clientX: at.x, clientY: at.y, bubbles: true, cancelable: true }));
+  }
+}
+
+/** Resolves once the page's type has loaded: until then the page is set in other type, and laid out otherwise. */
+export function typeLoaded() {
+  return document.fonts.ready.then(() => true);
+}

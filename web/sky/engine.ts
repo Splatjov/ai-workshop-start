@@ -196,8 +196,20 @@ const smooth = (low: number, high: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 
+/** Whether WebGL is drawn by the processor, not by a graphics card: the browser names what draws it. */
+function drawnInSoftware(): boolean {
+  const probe = document.createElement('canvas').getContext('webgl2');
+  if (!probe) return false;
+  const names = probe.getExtension('WEBGL_debug_renderer_info');
+  const drawnBy = String(names ? probe.getParameter(names.UNMASKED_RENDERER_WEBGL) : probe.getParameter(probe.RENDERER));
+  probe.getExtension('WEBGL_lose_context')?.loseContext();
+  return /swiftshader|llvmpipe|software|basic render/i.test(drawnBy);
+}
+
 export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: SkyEvents): Sky {
-  const renderer = new WebGLRenderer({ canvas, alpha: true, antialias: true, premultipliedAlpha: true });
+  // Where there is no graphics card, edges are not smoothed again: the pen smooths its own lines,
+  // and smoothing every edge a second time is what such a machine can least afford.
+  const renderer = new WebGLRenderer({ canvas, alpha: true, antialias: !drawnInSoftware(), premultipliedAlpha: true });
   renderer.setClearColor(0x000000, 0);
   renderer.autoClear = false;
 

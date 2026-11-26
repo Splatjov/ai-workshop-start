@@ -207,6 +207,11 @@ test('examples: nine repositories with skills, each a link that fills the field 
   await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/koog 1 skill');
   await expect(chosen(page).getByRole('heading', { level: 3 })).toHaveText('commits');
   expect(new URL(page.url()).searchParams.get('repo')).toBe('https://github.com/JetBrains/koog');
+
+  // With a world in view, the examples are out of it; back over the system, they are there again.
+  await expect(page.getByRole('navigation', { name: 'Examples' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(examples).toHaveCount(9);
 });
 
 test('examples: Ctrl/Cmd-, Shift- and middle-click open a new tab or window, this page does not scan', async ({ page, context }) => {
