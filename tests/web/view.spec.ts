@@ -129,3 +129,24 @@ test('?repo=<URL> scans at once; scanning writes it to the address', async ({ pa
   await page.reload();
   await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/empty 0 skills');
 });
+
+test('examples: six repositories with skills, each a link that fills the field and scans it', async ({ page }) => {
+  await page.goto('./');
+  const examples = page.getByRole('navigation', { name: 'Examples' }).getByRole('link');
+  await expect(examples).toHaveText([
+    'anthropics/skills',
+    'obra/superpowers',
+    'vercel-labs/agent-skills',
+    'openai/codex',
+    'JetBrains/kotlin',
+    'JetBrains/koog',
+  ]);
+  await expect(examples.first()).toHaveAttribute('href', `?repo=${encodeURIComponent('https://github.com/anthropics/skills')}`);
+  expect(requests).toEqual([]);
+
+  await examples.filter({ hasText: 'JetBrains/koog' }).click();
+  await expect(page.getByLabel('Repository link')).toHaveValue('https://github.com/JetBrains/koog');
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/koog 1 skill');
+  await expect(chosen(page).getByRole('heading', { level: 3 })).toHaveText('commits');
+  expect(new URL(page.url()).searchParams.get('repo')).toBe('https://github.com/JetBrains/koog');
+});
