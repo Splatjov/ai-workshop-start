@@ -18,8 +18,12 @@ what is shown differs
 - Without: each one's tree, 8 at a time: two requests a repository, so GitHub's limit of 60 an
   hour is reached past some 25 repositories → the rate limit message
 - With: one code search over all of them, at most 1000 files; more → a *warning*. Code search
-  leaves out archived and long inactive repositories: each repository it does not answer for is
-  read through its tree, as without a token
+  leaves out archived and long inactive repositories, and at times an active one: each
+  repository it does not answer for is read through its tree, as without a token
+- Past the token's limit of 5000 requests an hour (two a repository read through its tree, so
+  past some 2400 repositories without skills) →
+  the scan stops with `GitHub rate limit reached; try again in N minutes`, N from GitHub's
+  answer; `try again in a minute` when the limit resets within one, or GitHub does not say when
 - Forks and empty repositories are not scanned
 - A warning names its repository: `<owner>/<repo>: <warning>`
 - Unknown organization → a clear message, exit code 1

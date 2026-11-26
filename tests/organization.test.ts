@@ -116,6 +116,53 @@ test('organization: an archived repository, which code search leaves out, is sca
   assert.ok(withToken.requests.some((request) => request.url.includes('/search/code?')));
 });
 
+test('organization, with a token: an active repository that code search does not answer for is scanned too', async () => {
+  const ok = (body: unknown) => ({ status: 200, body });
+  const listed = RECORDING['https://api.github.com/users/atlas-org/repos?per_page=100&page=1'].body as object[];
+  const { fetch, requests } = github({
+    ...RECORDING,
+    'https://api.github.com/users/atlas-org/repos?per_page=100&page=1': ok([
+      ...listed,
+      // Not archived, pushed to last week, with skills, and yet absent from the search's answer:
+      // as getsentry/plugin-grok was, live, in `filename:SKILL.md user:getsentry`.
+      { full_name: 'atlas-org/active', default_branch: 'main', fork: false, archived: false, pushed_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() },
+    ]),
+    'https://api.github.com/repos/atlas-org/active/commits/main': ok({ sha: COMMIT }),
+    [`https://api.github.com/repos/atlas-org/active/git/trees/${COMMIT}?recursive=1`]: ok({
+      truncated: false,
+      tree: [{ path: 'skills/new/SKILL.md', mode: '100644', type: 'blob', sha: 'a' }],
+    }),
+    [`https://raw.githubusercontent.com/atlas-org/active/${COMMIT}/skills/new/SKILL.md`]: ok('---\nname: new\ndescription: Added last week.\n---\n'),
+  });
+  const result = await atlas(['scan', 'https://github.com/atlas-org'], { fetch, token: 'secret' });
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(
+    result.stdout,
+    ORGANIZATION.replace('atlas-org · 4 skills in 2 repositories', 'atlas-org · 5 skills in 3 repositories').replace(
+      '\natlas-org/alpha · 2 skills',
+      ['', 'atlas-org/active · 1 skill', 'new — Added last week.', `  https://github.com/atlas-org/active/blob/${COMMIT}/skills/new/SKILL.md`, '', 'atlas-org/alpha · 2 skills'].join('\n'),
+    ),
+  );
+  assert.ok(requests.some((request) => request.url.includes('/search/code?')));
+});
+
+test('organization, with a token, past its hourly limit → the message says when the limit resets', async () => {
+  const recorded = github().fetch;
+  const reset = Math.floor(Date.now() / 1000) + 30 * 60;
+  const fetch: Fetch = async (url, init) =>
+    url === 'https://api.github.com/repos/atlas-org/beta/commits/main'
+      ? new Response(JSON.stringify({ message: 'API rate limit exceeded for user ID 1.' }), {
+          status: 403,
+          headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(reset) },
+        })
+      : recorded(url, init);
+  assert.deepEqual(await atlas(['scan', 'https://github.com/atlas-org'], { fetch, token: 'secret' }), {
+    code: 1,
+    stdout: '',
+    stderr: 'GitHub rate limit reached; try again in 30 minutes',
+  });
+});
+
 test('organization: the repository list is read page by page', async () => {
   const repositories = Array.from({ length: 101 }, (_, index) => ({
     full_name: `many/r${index}`,

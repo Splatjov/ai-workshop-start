@@ -226,7 +226,7 @@ function client({ fetch, token, tokenSource = ENVIRONMENT }: GitHubOptions) {
     if (response.status === 404) throw new AtlasError(notFound);
     if (response.status === 409 && /empty/i.test(text)) throw new EmptyRepository(`Repository is empty: ${url}`);
     if ((response.status === 403 || response.status === 429) && /rate limit/i.test(text)) {
-      throw new AtlasError(`GitHub rate limit reached; ${token ? 'try again in a minute' : tokenSource.set}`);
+      throw new AtlasError(`GitHub rate limit reached; ${token ? `try again in ${wait(response)}` : tokenSource.set}`);
     }
     if (response.status === 401) throw new AtlasError(`GitHub rejected the token in ${tokenSource.name}`);
     throw new AtlasError(`GitHub answered ${response.status} for ${url}${text && `: ${text}`}`);
@@ -246,6 +246,17 @@ function client({ fetch, token, tokenSource = ENVIRONMENT }: GitHubOptions) {
       return new Uint8Array(await response.arrayBuffer());
     },
   };
+}
+
+/**
+ * How long until GitHub answers again. A limit that is used up (the token's 5000 requests an
+ * hour, code search's ten a minute) says when it resets; any other is over in a minute.
+ */
+function wait(response: Response): string {
+  const reset = Number(response.headers.get('x-ratelimit-reset'));
+  if (response.headers.get('x-ratelimit-remaining') !== '0' || !reset) return 'a minute';
+  const minutes = Math.ceil((reset * 1000 - Date.now()) / 60_000);
+  return minutes > 1 ? `${minutes} minutes` : 'a minute';
 }
 
 function encodePath(path: string): string {
