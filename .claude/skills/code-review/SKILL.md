@@ -70,8 +70,16 @@ Any failing command is a finding: quote the relevant output.
 
 For a PR, also check CI: `gh pr checks <n>` (exit code 8 just means "some pending"). A push to a PR
 branch usually starts two runs (`push` and `pull_request`); both count. On a fresh push they are
-often still pending — check again at the end of the review. Red is a finding; still pending is a
-note in the report, with the run links.
+often still pending — check again at the end of the review. Still pending is a note in the
+report, with the run links.
+
+Red: read why before judging (`gh run view <run-id> --log-failed | tail -40`).
+- The code fails (typecheck, a test, the smoke test) → a finding, quote the failing lines.
+- Infrastructure fails (apt/npm/browser download, a mirror 404, a runner timeout) before the
+  repository's code ran — often while the other run on the same commit is green → not a finding
+  about the change. Rerun only the failed jobs once (`gh run rerun <run-id> --failed`), check again
+  at the end, and in the report name the failing step and the cause, with the run link. Still red
+  or pending at the end → CI is not green: leave its definition-of-done box unticked.
 
 ## 4. Look for problems
 
@@ -115,9 +123,11 @@ Before reporting, try to disprove each candidate:
 - Re-read the surrounding code; check whether another layer already handles it.
 - Prove it where possible: a failing command, a quick script against `fixture/`, or a concrete
   input → wrong output trace. Scratch files go in `/tmp`, never in the repo.
-- Web behavior: run a throwaway Playwright probe. Copy this as is, from the repository root (the
+- Web behavior: run a throwaway Playwright probe. Run this block as is, from the repository root (the
   heredocs expand `$PWD`, so don't put `${...}` in them), then adapt the lines marked `adapt`
-  (the block is unindented on purpose: an indented `EOF` does not end a heredoc):
+  (the block is unindented on purpose: an indented `EOF` does not end a heredoc). To run it
+  without retyping:
+  `sed -n '/^mkdir -p \/tmp\/rv/,/^npx playwright test/p' .claude/skills/code-review/SKILL.md > /tmp/recipe.sh && bash /tmp/recipe.sh`
 ```bash
 mkdir -p /tmp/rv && ln -sfn "$PWD/node_modules" /tmp/rv/node_modules
 cat > /tmp/rv/pw.config.ts <<EOF
@@ -185,13 +195,18 @@ npx playwright test -c /tmp/rv/pw.config.ts 2>&1 | grep -E 'RELEASE|NEW TAB|pass
 ```
   - Race: the 2nd scan must start through a *different* entry point than the 1st (submit, Enter, a
     link, `?repo=` on load). `AFTER RELEASE` must have field, `repo` and `h2` naming the same
-    repository; `BEFORE RELEASE` must still show `Scanning…` (the 1st scan is still running).
+    repository, the 2nd one; otherwise the stale 1st scan won. `BEFORE RELEASE` shows the 2nd
+    result while the 1st scan is still held: a `button` of `Scan` there means the loading state
+    ended while a scan is still running. Both are symptoms of one unguarded `scan()` (one finding),
+    unless the fix cancels the 1st scan on purpose, in which case `Scan` there is correct.
     Don't replace the hold with a fixed delay: a scan is ~4 sequential requests, so "delay each
     answer 800 ms, wait 2.5 s" ends before the slow scan does and reports a false "no race".
   - New tab: report which of ctrl/cmd, shift and middle-click open one. Middle-click fires no
     `click`, so it usually works even when the others are broken; it doesn't clear the finding.
-  - A change to the layout: also take a screenshot (`page.screenshot({ path, fullPage: true })`)
-    into `$AIR_ARTIFACTS_DIR` when set, and look at it.
+  - A change to the layout: also take screenshots (`page.screenshot({ path, fullPage: true })`)
+    with a result on screen (`./?repo=https://github.com/JetBrains/atlas-demo`), at the default
+    size and at a phone width (`page.setViewportSize({ width: 390, height: 800 })`), into
+    `$AIR_ARTIFACTS_DIR` when set, and look at them. Only what the change caused is a finding.
   - Delete or ignore `/tmp/rv`; never add the probe to the repository.
 - A confirmed bug the tests missed: say which test would have caught it (one line), so the fix
   comes with its test.
@@ -235,9 +250,12 @@ Print a markdown report:
 ```
 
 Order findings by severity. Line numbers are of the file at the reviewed head.
-Verdict: ❌ if a check or CI fails, or the definition of done is missing (spec not updated, no test
-for a new spec case); ⚠️ if any `important` finding; ✅ otherwise (nits only, or nothing).
-Tick a definition-of-done box only for what you checked; write `(CI pending)` rather than ticking.
+Verdict: ❌ if a check fails or CI fails on the code, or the definition of done is missing (spec
+not updated, no test for a new spec case); ⚠️ if any `important` finding; ✅ otherwise (nits only,
+or nothing). CI red only from infrastructure doesn't set the verdict, but say so in it ("✅ ready
+once CI's rerun is green").
+Tick a definition-of-done box only for what you checked; write `(CI pending)` or `(CI red:
+infrastructure, rerun <link>)` rather than ticking.
 
 With `--comment` and a PR target:
 - Post each finding with a file/line **inside the diff** as an inline review comment on the PR's
