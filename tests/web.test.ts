@@ -99,7 +99,7 @@ test('scan: the CLI’s message for what cannot be scanned', async () => {
   });
 });
 
-test('scan: with a token, it goes to GitHub with every API request, and code search finds the skills', async () => {
+test('scan: with a token, it goes to GitHub with every API request; never code search, which a page cannot read', async () => {
   const sent: { url: string; authorization?: string }[] = [];
   const withToken = createBrowserBackend({
     fetch: (url, init) => {
@@ -111,7 +111,8 @@ test('scan: with a token, it goes to GitHub with every API request, and code sea
   assert.ok('skills' in view, JSON.stringify(view));
   assert.deepEqual(view.skills.map((skill) => skill.name), ['commits']);
   const api = sent.filter(({ url }) => url.startsWith('https://api.github.com/'));
-  assert.ok(api.some(({ url }) => url.includes('/search/code?q=filename:SKILL.md+repo:JetBrains/koog')));
+  assert.ok(!sent.some(({ url }) => url.includes('/search/')));
+  assert.ok(api.some(({ url }) => url.includes('/git/trees/')));
   assert.ok(api.every(({ authorization }) => authorization === 'Bearer secret'));
 
   // An empty token is no token.
@@ -136,7 +137,7 @@ test('scan: the token messages name the GitHub token field, not GITHUB_TOKEN', a
   });
 });
 
-test('scan: a tree too large to list, without a token → the warning names the GitHub token field, not GITHUB_TOKEN', async () => {
+test('scan: a tree too large to list, with a token or without → the warning points to the CLI, which searches everywhere', async () => {
   const api = 'https://api.github.com/repos/JetBrains/huge';
   const huge = createBrowserBackend({
     fetch: replay({
@@ -146,11 +147,13 @@ test('scan: a tree too large to list, without a token → the warning names the 
       [`${api}/git/trees/${COMMIT}`]: { status: 200, body: { truncated: false, tree: [] } },
     }),
   });
-  const view = await huge.scan('https://github.com/JetBrains/huge');
-  assert.ok('skills' in view, JSON.stringify(view));
-  assert.deepEqual(view.warnings, [
-    'the tree is too large to list at once; looked only in .agents/skills, .claude/skills, .github/skills, agent/skills (the GitHub token field searches everywhere)',
-  ]);
+  for (const token of [undefined, 'secret']) {
+    const view = await huge.scan('https://github.com/JetBrains/huge', { token });
+    assert.ok('skills' in view, JSON.stringify(view));
+    assert.deepEqual(view.warnings, [
+      'the tree is too large to list at once; looked only in .agents/skills, .claude/skills, .github/skills, agent/skills (the CLI with GITHUB_TOKEN searches everywhere)',
+    ]);
+  }
 });
 
 test('scan: an organization → its repositories with skills, by id, each SKILL.md as scanned, warnings named', async () => {
