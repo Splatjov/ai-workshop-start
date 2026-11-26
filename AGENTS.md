@@ -10,4 +10,5 @@ Integration tests for every case in the spec.
 ## Commands
 - `npm ci`: first, in a fresh checkout
 - `npm test`: the tests
+- `npm run test:e2e`: end-to-end, on real GitHub repositories (network)
 - `npm run typecheck`: the types, as CI checks them

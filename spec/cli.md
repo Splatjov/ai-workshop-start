@@ -1,5 +1,5 @@
 # Command line
-`./skill-atlas scan <GitHub URL | directory>`
+`./skill-atlas scan <GitHub URL | directory>`; a `/tree/<ref>` URL pins a commit
 Prints the result **at once**; *nothing is stored*.
 `GITHUB_TOKEN`, optional: a higher GitHub rate limit.
 ## Output
