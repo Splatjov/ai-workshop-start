@@ -58,6 +58,29 @@ header p {
   gap: 6px;
 }
 
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 14px;
+  color: #57534e;
+}
+
+.examples ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-flow: row wrap;
+  gap: 4px 14px;
+}
+
+.examples a {
+  color: #1f3a8a;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -107,7 +130,7 @@ header p {
   }
 }
 
-nav ul {
+nav[aria-label='Skills'] ul {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -116,7 +139,7 @@ nav ul {
   gap: 4px;
 }
 
-nav button {
+nav[aria-label='Skills'] button {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -131,21 +154,21 @@ nav button {
   cursor: pointer;
 }
 
-nav button:hover {
+nav[aria-label='Skills'] button:hover {
   background: #f1efe7;
 }
 
-nav button[aria-current='true'] {
+nav[aria-label='Skills'] button[aria-current='true'] {
   border-left-color: #1f3a8a;
   background: #eef2ff;
 }
 
-nav button span {
+nav[aria-label='Skills'] button span {
   color: #57534e;
   font-size: 14px;
 }
 
-nav button code {
+nav[aria-label='Skills'] button code {
   color: #78716c;
   font-size: 12px;
   overflow-wrap: anywhere;

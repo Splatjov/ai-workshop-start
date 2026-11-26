@@ -8,12 +8,22 @@ import {
   DrawablyHighlight,
   DrawablyInput,
 } from 'drawably/react';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from 'react';
 import type { ScanView, SkillView } from '../src/browser.ts';
 
 export type Backend = { scan(input: string): Promise<ScanView> };
 
 const INK = '#1f3a8a';
+
+/** Repositories with skills, one click away, for a first look. */
+export const EXAMPLES = [
+  'anthropics/skills',
+  'obra/superpowers',
+  'vercel-labs/agent-skills',
+  'openai/codex',
+  'JetBrains/kotlin',
+  'JetBrains/koog',
+] as const;
 
 /** The repository in the page's address, `?repo=<URL>`, so a scan can be shared and reloaded. */
 function repoInAddress(): string {
@@ -25,11 +35,15 @@ export function App({ backend }: { backend: Backend }) {
   const [scanning, setScanning] = useState(false);
   const [view, setView] = useState<ScanView>();
   const [selected, setSelected] = useState<string>();
+  // Only the latest scan shows: an earlier one that answers later is dropped.
+  const latest = useRef(0);
 
   async function scan(url: string) {
     if (!url.trim()) return;
+    const id = ++latest.current;
     setScanning(true);
     const result = await backend.scan(url);
+    if (id !== latest.current) return;
     setView(result);
     setSelected('skills' in result ? result.skills[0]?.id : undefined);
     setScanning(false);
@@ -40,12 +54,24 @@ export function App({ backend }: { backend: Backend }) {
     if (url) void scan(url);
   }, []);
 
+  function scanAndShare(url: string) {
+    const address = new URL(window.location.href);
+    address.searchParams.set('repo', url.trim());
+    window.history.replaceState(null, '', address);
+    void scan(url);
+  }
+
   function submit(event: FormEvent) {
     event.preventDefault();
-    const address = new URL(window.location.href);
-    address.searchParams.set('repo', input.trim());
-    window.history.replaceState(null, '', address);
-    void scan(input);
+    scanAndShare(input);
+  }
+
+  function pick(event: MouseEvent, url: string) {
+    // Ctrl/Cmd-, Shift-, Alt-click: the browser's own (a new tab, a window, a download).
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    setInput(url);
+    scanAndShare(url);
   }
 
   return (
@@ -77,6 +103,22 @@ export function App({ backend }: { backend: Backend }) {
           <Search size={18} color="#fff" /> {scanning ? 'Scanning…' : 'Scan'}
         </DrawablyButton>
       </form>
+
+      <nav className="examples" aria-label="Examples">
+        <span>Try:</span>
+        <ul>
+          {EXAMPLES.map((id) => {
+            const url = `https://github.com/${id}`;
+            return (
+              <li key={id}>
+                <a href={`?repo=${encodeURIComponent(url)}`} onClick={(event) => pick(event, url)}>
+                  {id}
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
 
       {view && 'error' in view && (
         <DrawablyAlert role="alert" className="error" stroke="#b42318">

@@ -13,6 +13,11 @@ controls and [@sketchyicons/react](https://www.npmjs.com/package/@sketchyicons/r
 - Warnings: under the repository, as notes
 - An unreachable repository, an unknown ref, a non-GitHub link → the CLI's message, as an alert
 - No `SKILL.md` → `0 skills`, nothing to choose
+- Examples, under the field: `anthropics/skills`, `obra/superpowers`, `vercel-labs/agent-skills`,
+  `openai/codex`, `JetBrains/kotlin`, `JetBrains/koog`, each a link to `?repo=<its URL>`;
+  clicking one puts its URL in the field and scans it; Ctrl/Cmd-, Shift- and middle-click open it
+  in a new tab or window, as any link
+- A scan started while another runs wins: only the latest scan's result is shown
 - `?repo=<URL>` in the page's address scans at once; scanning writes it there, so a scan can be
   shared or reloaded. *Nothing is stored*
 ## Tests

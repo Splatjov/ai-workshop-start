@@ -38,6 +38,12 @@ export const RECORDING: Recording = {
   [`${API}/JetBrains/empty/commits/main`]: ok({ sha: COMMIT }),
   [`${API}/JetBrains/empty/git/trees/${COMMIT}?recursive=1`]: ok({ truncated: false, tree: [blob('README.md')] }),
 
+  // JetBrains/koog: one of the examples, with one skill.
+  [`${API}/JetBrains/koog`]: ok({ full_name: 'JetBrains/koog', default_branch: 'develop' }),
+  [`${API}/JetBrains/koog/commits/develop`]: ok({ sha: COMMIT }),
+  [`${API}/JetBrains/koog/git/trees/${COMMIT}?recursive=1`]: ok({ truncated: false, tree: [blob('.claude/skills/commits/SKILL.md')] }),
+  [`${RAW}/JetBrains/koog/${COMMIT}/.claude/skills/commits/SKILL.md`]: ok(COMMITS_MD),
+
   // JetBrains/no-such-repository: not there.
   [`${API}/JetBrains/no-such-repository`]: { status: 404, body: { message: 'Not Found' } },
 };
