@@ -273,12 +273,18 @@ test('organization, with a token, past its limits → the message says when to t
     stderr: 'GitHub rate limit reached; try again in a minute',
   });
 
-  // GraphQL says it in a 200 answer.
-  const { fetch } = github({
-    ...RECORDING,
-    'https://api.github.com/graphql': { status: 200, body: { errors: [{ type: 'RATE_LIMITED', message: 'API rate limit exceeded for user ID 1.' }] } },
-  });
-  assert.deepEqual(await atlas(['scan', 'https://github.com/atlas-org'], { fetch, token: 'secret' }), {
+  // GraphQL says it in a 200 answer, with the same headers.
+  const exhausted = (headers: Record<string, string>): Fetch => async (url, init) =>
+    url === 'https://api.github.com/graphql'
+      ? new Response(JSON.stringify({ errors: [{ type: 'RATE_LIMITED', message: 'API rate limit exceeded for user ID 1.' }] }), { status: 200, headers })
+      : recorded(url, init);
+  assert.deepEqual(
+    await atlas(['scan', 'https://github.com/atlas-org'], { fetch: exhausted({ 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(reset) }), token: 'secret' }),
+    { code: 1, stdout: '', stderr: 'GitHub rate limit reached; try again in 30 minutes' },
+  );
+
+  // GitHub does not say when.
+  assert.deepEqual(await atlas(['scan', 'https://github.com/atlas-org'], { fetch: exhausted({}), token: 'secret' }), {
     code: 1,
     stdout: '',
     stderr: 'GitHub rate limit reached; try again in a minute',

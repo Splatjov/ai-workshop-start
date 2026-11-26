@@ -299,9 +299,10 @@ function client({ fetch, token, tokenSource = ENVIRONMENT }: GitHubOptions) {
     }
   }
 
-  async function request(url: string, notFound: string, post?: string): Promise<unknown> {
+  /** The answer, when GitHub gives one; its headers say when a limit resets. */
+  async function send(url: string, notFound: string, post?: string): Promise<Response> {
     const response = await get(url, post === undefined ? { headers } : { method: 'POST', headers, body: post });
-    if (response.ok) return response.json();
+    if (response.ok) return response;
     if (response.status === 502 || response.status === 504) throw new TimedOut(`GitHub answered ${response.status} for ${url}`);
     const body: unknown = await response.json().catch(() => undefined);
     const message = (body as { message?: unknown } | undefined)?.message;
@@ -315,6 +316,10 @@ function client({ fetch, token, tokenSource = ENVIRONMENT }: GitHubOptions) {
     throw new AtlasError(`GitHub answered ${response.status} for ${url}${text && `: ${text}`}`);
   }
 
+  async function request(url: string, notFound: string): Promise<unknown> {
+    return (await send(url, notFound)).json();
+  }
+
   return {
     /** A GitHub API answer; `notFound` explains a 404. */
     json<T>(url: string, notFound = `Not found on GitHub: ${url}`): Promise<T> {
@@ -324,13 +329,15 @@ function client({ fetch, token, tokenSource = ENVIRONMENT }: GitHubOptions) {
     /** A GraphQL answer's data; needs a token. */
     async graphql<T>(query: string): Promise<T> {
       const url = `${API}/graphql`;
-      const answer = (await request(url, `Not found on GitHub: ${url}`, JSON.stringify({ query }))) as {
+      const response = await send(url, `Not found on GitHub: ${url}`, JSON.stringify({ query }));
+      const answer = (await response.json()) as {
         data?: T;
         errors?: { type?: string; message?: string }[];
       };
       if (answer.data) return answer.data;
       const [error] = answer.errors ?? [];
-      if (error?.type === 'RATE_LIMITED') throw new AtlasError('GitHub rate limit reached; try again in a minute');
+      // A used-up limit is a 200 here, with the headers of a REST answer past its limit.
+      if (error?.type === 'RATE_LIMITED') throw new AtlasError(`GitHub rate limit reached; try again in ${wait(response)}`);
       throw new AtlasError(`GitHub answered ${url} with an error${error?.message ? `: ${error.message}` : ''}`);
     },
     /** A file's bytes at the scanned commit, or undefined if it is not there. */
