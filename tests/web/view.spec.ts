@@ -1,5 +1,5 @@
 // spec/web.md: the page, as a user sees it, over recorded GitHub answers.
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { BROKEN_MD, COMMIT, COMMITS_MD, RECORDING, STYLE_MD } from './recording.ts';
 
 const blob = `https://github.com/JetBrains/atlas-demo/blob/${COMMIT}`;
@@ -168,12 +168,13 @@ test('examples: six repositories with skills, each a link that fills the field a
   expect(new URL(page.url()).searchParams.get('repo')).toBe('https://github.com/JetBrains/koog');
 });
 
-test('examples: Ctrl/Cmd- and Shift-click open a new tab or window, this page does not scan', async ({ page, context }) => {
+test('examples: Ctrl/Cmd-, Shift- and middle-click open a new tab or window, this page does not scan', async ({ page, context }) => {
   await page.goto('./');
   const koog = page.getByRole('navigation', { name: 'Examples' }).getByRole('link', { name: 'JetBrains/koog' });
-  for (const modifiers of [['ControlOrMeta'], ['Shift']] as const) {
+  const clicks: Parameters<Locator['click']>[0][] = [{ modifiers: ['ControlOrMeta'] }, { modifiers: ['Shift'] }, { button: 'middle' }];
+  for (const click of clicks) {
     const opened = context.waitForEvent('page');
-    await koog.click({ modifiers: [...modifiers] });
+    await koog.click(click);
     const tab = await opened;
     await expect(tab.getByRole('heading', { level: 2 })).toHaveText('JetBrains/koog 1 skill');
     await tab.close();
