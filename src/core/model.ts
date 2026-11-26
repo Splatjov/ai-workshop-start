@@ -10,6 +10,14 @@ export type Repository = {
   commit: string;
 };
 
+/** An organization, or a user: the owner of the scanned repositories. */
+export type Organization = {
+  /** The login, for example `JetBrains`. */
+  id: string;
+  /** `https://github.com/<owner>`. */
+  url: string;
+};
+
 /** One skill. Its link is derived, by `skillLink`. */
 export type Skill = {
   /** `repo:path`, for example `JetBrains/kotlin:.claude/skills/x/SKILL.md`. */
@@ -37,4 +45,16 @@ export function skillLink(repository: Repository, skill: Skill): string {
 export function sortSkills(skills: Skill[]): Skill[] {
   const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
   return [...skills].sort((a, b) => compare(a.name, b.name) || compare(a.path, b.path));
+}
+
+/**
+ * The skills that have every word of the query, in any case, in their name, description or path.
+ * An empty query keeps them all.
+ */
+export function filterSkills<T extends Skill>(skills: T[], query: string): T[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  return skills.filter((skill) => {
+    const text = `${skill.name}\n${skill.description}\n${skill.path}`.toLowerCase();
+    return words.every((word) => text.includes(word));
+  });
 }

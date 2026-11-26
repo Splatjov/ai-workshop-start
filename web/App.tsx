@@ -1,5 +1,6 @@
-// The web view: a field for a repository link, its skills, and the SKILL.md of the chosen one.
-import { AlertTriangle, ExternalLink, FileText, FolderGit2, Search, Sparkles } from '@sketchyicons/react';
+// The web view: a field for a repository or an organization link, a token, the skills with a
+// filter, and the SKILL.md of the chosen one.
+import { AlertTriangle, ExternalLink, FileText, FolderGit2, KeyRound, Search, Sparkles } from '@sketchyicons/react';
 import {
   DrawablyAlert,
   DrawablyBadge,
@@ -9,9 +10,10 @@ import {
   DrawablyInput,
 } from 'drawably/react';
 import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from 'react';
-import type { ScanView, SkillView } from '../src/browser.ts';
+import type { RepositoryView, ScanOptions, ScanView, SkillView } from '../src/browser.ts';
+import { filterSkills } from '../src/core/model.ts';
 
-export type Backend = { scan(input: string): Promise<ScanView> };
+export type Backend = { scan(input: string, options?: ScanOptions): Promise<ScanView> };
 
 const INK = '#1f3a8a';
 
@@ -35,6 +37,9 @@ function repoInAddress(): string {
 
 export function App({ backend }: { backend: Backend }) {
   const [input, setInput] = useState(repoInAddress);
+  // Kept in the page's memory only: not in the address, not in storage.
+  const [token, setToken] = useState('');
+  const [filter, setFilter] = useState('');
   const [scanning, setScanning] = useState(false);
   const [view, setView] = useState<ScanView>();
   const [selected, setSelected] = useState<string>();
@@ -45,10 +50,11 @@ export function App({ backend }: { backend: Backend }) {
     if (!url.trim()) return;
     const id = ++latest.current;
     setScanning(true);
-    const result = await backend.scan(url);
+    const result = await backend.scan(url, { token });
     if (id !== latest.current) return;
     setView(result);
-    setSelected('skills' in result ? result.skills[0]?.id : undefined);
+    setFilter('');
+    setSelected(undefined);
     setScanning(false);
   }
 
@@ -83,7 +89,7 @@ export function App({ backend }: { backend: Backend }) {
         <h1>
           <Sparkles size={32} color={INK} /> <DrawablyHighlight>Skill Atlas</DrawablyHighlight>
         </h1>
-        <p>Every SKILL.md in a GitHub repository.</p>
+        <p>Every SKILL.md in a GitHub repository, or in all of an organization's.</p>
       </header>
 
       <form className="scan" onSubmit={submit} role="search">
@@ -107,6 +113,30 @@ export function App({ backend }: { backend: Backend }) {
         </DrawablyButton>
       </form>
 
+      <div className="token">
+        <label htmlFor="token">
+          <KeyRound size={18} color={INK} /> GitHub token
+        </label>
+        <DrawablyInput
+          id="token"
+          name="token"
+          type="password"
+          placeholder="optional"
+          value={token}
+          onChange={(event) => setToken(event.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+          aria-describedby="token-hint"
+        />
+        <span id="token-hint">
+          A higher rate limit: needed for most organizations. Sent to GitHub only, never stored.{' '}
+          <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer">
+            Create one
+          </a>
+          : read-only, public repositories.
+        </span>
+      </div>
+
       <nav className="examples" aria-label="Examples">
         <span>Try:</span>
         <ul>
@@ -129,83 +159,142 @@ export function App({ backend }: { backend: Backend }) {
         </DrawablyAlert>
       )}
 
-      {view && 'skills' in view && (
-        <Result
-          view={view}
-          selected={view.skills.find((skill) => skill.id === selected)}
-          onSelect={setSelected}
-        />
+      {view && !('error' in view) && (
+        <Result view={view} filter={filter} onFilter={setFilter} selected={selected} onSelect={setSelected} />
       )}
     </main>
   );
 }
 
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+
 function Result({
   view,
+  filter,
+  onFilter,
   selected,
   onSelect,
 }: {
-  view: Extract<ScanView, { skills: unknown }>;
-  selected?: SkillView;
+  view: Exclude<ScanView, { error: string }>;
+  filter: string;
+  onFilter(filter: string): void;
+  selected?: string;
   onSelect(id: string): void;
 }) {
-  const { repository, skills, warnings } = view;
+  const organization = 'organization' in view ? view.organization : undefined;
+  const repositories: RepositoryView[] = 'repositories' in view ? view.repositories : [view];
+  const all = repositories.flatMap((repository) => repository.skills);
+  // The repositories and the skills the filter leaves.
+  const shown = repositories
+    .map((repository) => ({ ...repository, skills: filterSkills(repository.skills, filter) }))
+    .filter((repository) => repository.skills.length > 0);
+  const skills = shown.flatMap((repository) => repository.skills);
+  // The chosen skill, or else the first one shown.
+  const chosen = skills.find((skill) => skill.id === selected) ?? skills[0];
+  const count = skills.length === all.length ? `${all.length}` : `${skills.length} of ${all.length}`;
   return (
     <section aria-label="Scan result">
       <h2 className="repository">
-        <a href={`${repository.url}/tree/${repository.commit}`} target="_blank" rel="noreferrer">
-          {repository.id}
-        </a>{' '}
+        {'organization' in view ? (
+          <a href={view.organization.url} target="_blank" rel="noreferrer">
+            {view.organization.id}
+          </a>
+        ) : (
+          <a href={`${view.repository.url}/tree/${view.repository.commit}`} target="_blank" rel="noreferrer">
+            {view.repository.id}
+          </a>
+        )}{' '}
         <DrawablyBadge>
-          {skills.length} {skills.length === 1 ? 'skill' : 'skills'}
+          {count} {all.length === 1 ? 'skill' : 'skills'}
+          {organization && ` in ${plural(shown.length, 'repository', 'repositories')}`}
         </DrawablyBadge>
       </h2>
 
-      {warnings.map((warning) => (
+      {view.warnings.map((warning) => (
         <p className="warning" role="note" key={warning}>
           <AlertTriangle size={18} color="#b54708" />
           {warning}
         </p>
       ))}
 
+      {all.length > 0 && (
+        <div className="filter">
+          <label htmlFor="filter" className="visually-hidden">
+            Filter skills
+          </label>
+          <Search size={20} color={INK} />
+          <DrawablyInput
+            id="filter"
+            name="filter"
+            type="search"
+            placeholder="Filter by name, description or path"
+            value={filter}
+            onChange={(event) => onFilter(event.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </div>
+      )}
+
+      {all.length > 0 && skills.length === 0 && (
+        <p className="nothing" role="status">
+          No skill matches “{filter.trim()}”.
+        </p>
+      )}
+
       {skills.length > 0 && (
         <div className="atlas">
           <nav aria-label="Skills">
-            <ul>
-              {skills.map((skill) => (
-                <li key={skill.id}>
-                  <button
-                    type="button"
-                    aria-current={skill.id === selected?.id ? 'true' : undefined}
-                    onClick={() => onSelect(skill.id)}
-                  >
-                    <strong>{skill.name}</strong>
-                    {skill.description && <span>{firstSentence(skill.description)}</span>}
-                    <code>{skill.path}</code>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            {shown.map(({ repository, skills }) => (
+              <section key={repository.id} aria-label={organization && repository.id}>
+                {organization && (
+                  <h3>
+                    <a href={`${repository.url}/tree/${repository.commit}`} target="_blank" rel="noreferrer">
+                      {repository.id}
+                    </a>
+                  </h3>
+                )}
+                <ul>
+                  {skills.map((skill) => (
+                    <li key={skill.id}>
+                      <button
+                        type="button"
+                        aria-current={skill.id === chosen?.id ? 'true' : undefined}
+                        onClick={() => onSelect(skill.id)}
+                      >
+                        <strong>{skill.name}</strong>
+                        {skill.description && <span>{firstSentence(skill.description)}</span>}
+                        <code>{skill.path}</code>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
           </nav>
 
-          {selected && (
-            <DrawablyCard key={selected.id} className="skill" aria-label={`${selected.name}: SKILL.md`} role="region">
-              <h3>
-                <FileText size={22} color={INK} /> {selected.name}
-              </h3>
-              {selected.description && <p>{selected.description}</p>}
-              <p className="links">
-                <a href={selected.link} target="_blank" rel="noreferrer">
-                  <ExternalLink size={16} color={INK} /> {selected.path}
-                </a>
-                {selected.copies.length > 0 && <span>also in {selected.copies.join(', ')}</span>}
-              </p>
-              <pre aria-label="SKILL.md">{selected.markdown}</pre>
-            </DrawablyCard>
-          )}
+          {chosen && <Chosen key={chosen.id} skill={chosen} />}
         </div>
       )}
     </section>
+  );
+}
+
+function Chosen({ skill }: { skill: SkillView }) {
+  return (
+    <DrawablyCard className="skill" aria-label={`${skill.name}: SKILL.md`} role="region">
+      <h3>
+        <FileText size={22} color={INK} /> {skill.name}
+      </h3>
+      {skill.description && <p>{skill.description}</p>}
+      <p className="links">
+        <a href={skill.link} target="_blank" rel="noreferrer">
+          <ExternalLink size={16} color={INK} /> {skill.path}
+        </a>
+        {skill.copies.length > 0 && <span>also in {skill.copies.join(', ')}</span>}
+      </p>
+      <pre aria-label="SKILL.md">{skill.markdown}</pre>
+    </DrawablyCard>
   );
 }
 

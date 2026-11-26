@@ -1,5 +1,5 @@
 import { findSkills, mergeCopies, type SkillFile } from './find.ts';
-import { sortSkills, type Repository, type Skill } from './model.ts';
+import { sortSkills, type Organization, type Repository, type Skill } from './model.ts';
 import { parseSkill } from './parse.ts';
 
 /** A repository to scan: its files, and how to read them. */
@@ -30,6 +30,45 @@ export async function scan(source: Source): Promise<ScanResult> {
     skills: sortSkills(results.map((result) => result.skill)),
     warnings: [...source.warnings, ...missing, ...results.flatMap((result) => (result.warning ? [result.warning] : []))],
   };
+}
+
+/** An organization to scan: its repositories, each at its default branch. */
+export type OrganizationSource = {
+  organization: Organization;
+  repositories: Source[];
+  /** What listing the repositories had to leave out. */
+  warnings: string[];
+};
+
+/** The repositories that have skills, by id; each warning names its repository. */
+export type OrganizationResult = { organization: Organization; repositories: ScanResult[]; warnings: string[] };
+
+/** The same scan, for each repository; those without a skill are left out. */
+export async function scanOrganization(source: OrganizationSource): Promise<OrganizationResult> {
+  const results = await pooled(source.repositories, 8, scan);
+  results.sort((a, b) => (a.repository.id < b.repository.id ? -1 : a.repository.id > b.repository.id ? 1 : 0));
+  return {
+    organization: source.organization,
+    repositories: results.filter((result) => result.skills.length > 0),
+    warnings: [
+      ...source.warnings,
+      ...results.flatMap((result) => result.warnings.map((warning) => `${result.repository.id}: ${warning}`)),
+    ],
+  };
+}
+
+/** `run` for every item, in order, at most `limit` at the same time. */
+export async function pooled<T, R>(items: T[], limit: number, run: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await run(items[index]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
 }
 
 function readSkill(source: Source, file: SkillFile, text: string): { skill: Skill; warning?: string } {

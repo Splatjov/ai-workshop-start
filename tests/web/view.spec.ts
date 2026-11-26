@@ -1,10 +1,12 @@
 // spec/web.md: the page, as a user sees it, over recorded GitHub answers.
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { BROKEN_MD, COMMIT, COMMITS_MD, RECORDING, STYLE_MD } from './recording.ts';
+import { BROKEN_MD, COMMIT, COMMITS_MD, GAMMA_COMMIT, GRADLE_MD, RECORDING, STYLE_MD } from './recording.ts';
 
 const blob = `https://github.com/JetBrains/atlas-demo/blob/${COMMIT}`;
 let requests: string[];
 let answered: string[];
+/** The Authorization header of each request to the GitHub API. */
+let authorizations: (string | undefined)[];
 let errors: string[];
 /** GitHub's answers for URLs matching a pattern wait until its promise resolves: a slow repository. */
 let holds: { pattern: RegExp; open: Promise<void> }[];
@@ -19,6 +21,7 @@ function slow(repository: string): () => void {
 test.beforeEach(async ({ page, context }) => {
   requests = [];
   answered = [];
+  authorizations = [];
   errors = [];
   holds = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -26,6 +29,7 @@ test.beforeEach(async ({ page, context }) => {
   await context.route(/^https:\/\/(api\.github\.com|raw\.githubusercontent\.com)\//, async (route) => {
     const url = route.request().url();
     requests.push(url);
+    if (url.startsWith('https://api.github.com/')) authorizations.push(route.request().headers().authorization);
     const answer = RECORDING[url];
     for (const { pattern, open } of holds) if (pattern.test(url)) await open;
     if (!answer) return route.abort('internetdisconnected');
@@ -223,4 +227,142 @@ test('a later scan that ends first stays shown when the earlier one answers', as
   await expect.poll(() => answered.filter((url) => url.includes('/atlas-demo/') && url.endsWith('SKILL.md')).length).toBe(4);
   await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/koog 1 skill');
   await expect(page.locator('form').getByRole('button')).toBeEnabled();
+});
+
+const filterField = (page: Page) => page.getByLabel('Filter skills');
+
+test('filter: only the matching skills, M of N skills; the chosen one stays, or else the first match', async ({ page }) => {
+  await page.goto('./');
+  await expect(filterField(page)).toHaveCount(0); // nothing scanned, nothing to filter
+  await scan(page, 'https://github.com/JetBrains/atlas-demo');
+  await expect(skillButtons(page)).toHaveCount(3);
+  const scanned = requests.length;
+
+  // The chosen skill, code-style, does not match: the first match is chosen.
+  await filterField(page).fill('COMMIT messages');
+  await expect(skillButtons(page)).toHaveText(['commitsWrite commit messages the way this repository does..claude/skills/commits/SKILL.md']);
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/atlas-demo 1 of 3 skills');
+  await expect(chosen(page)).toHaveAccessibleName('commits: SKILL.md');
+  await expect(skillButtons(page).first()).toHaveAttribute('aria-current', 'true');
+
+  // By path; the chosen skill matches and stays chosen.
+  await filterField(page).fill('');
+  await skillButtons(page).filter({ hasText: 'release' }).click();
+  await filterField(page).fill('skill.md  tools/');
+  await expect(skillButtons(page)).toHaveText(['releasetools/release/SKILL.md']);
+  await filterField(page).fill('e');
+  await expect(skillButtons(page)).toHaveCount(3);
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/atlas-demo 3 skills');
+  await expect(chosen(page)).toHaveAccessibleName('release: SKILL.md');
+
+  expect(requests.length, 'filtering does not scan').toBe(scanned);
+});
+
+test('filter: no match → a message, nothing chosen; a new scan clears it', async ({ page }) => {
+  await page.goto('./');
+  await scan(page, 'https://github.com/JetBrains/atlas-demo');
+  await filterField(page).fill('no-such-skill');
+  await expect(page.getByRole('status')).toHaveText('No skill matches “no-such-skill”.');
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/atlas-demo 0 of 3 skills');
+  await expect(page.getByRole('navigation', { name: 'Skills' })).toHaveCount(0);
+  await expect(chosen(page)).toHaveCount(0);
+
+  await scan(page, 'https://github.com/JetBrains/koog');
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/koog 1 skill');
+  await expect(filterField(page)).toHaveValue('');
+  await expect(skillButtons(page)).toHaveCount(1);
+
+  await scan(page, 'https://github.com/JetBrains/empty');
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/empty 0 skills');
+  await expect(filterField(page)).toHaveCount(0);
+});
+
+test('GitHub token: a password field; the next scan sends it to GitHub, and it is not kept', async ({ page }) => {
+  await page.goto('./');
+  const token = page.getByLabel('GitHub token');
+  await expect(token).toHaveAttribute('type', 'password');
+  await expect(token).toHaveAccessibleDescription(/Sent to GitHub only, never stored/);
+
+  // Without a token: no Authorization header, through the tree.
+  await scan(page, 'https://github.com/JetBrains/koog');
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/koog 1 skill');
+  expect(authorizations.length).toBeGreaterThan(0);
+  expect(authorizations.every((header) => header === undefined)).toBe(true);
+  expect(requests.some((url) => url.includes('/search/'))).toBe(false);
+
+  // With one: every API request carries it, and code search finds the skills.
+  authorizations.length = 0;
+  await token.fill('secret-token');
+  await scan(page, 'https://github.com/JetBrains/koog');
+  await expect.poll(() => requests.some((url) => url.includes('/search/code?q=filename:SKILL.md+repo:JetBrains/koog'))).toBe(true);
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/koog 1 skill');
+  expect(authorizations.length).toBeGreaterThan(0);
+  expect(authorizations.every((header) => header === 'Bearer secret-token')).toBe(true);
+
+  // Not in the address, not stored, gone on reload.
+  expect(page.url()).not.toContain('secret-token');
+  expect(await page.evaluate('JSON.stringify([{ ...localStorage }, { ...sessionStorage }, document.cookie])')).toBe('[{},{},""]');
+  await page.reload();
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/koog 1 skill');
+  await expect(page.getByLabel('GitHub token')).toHaveValue('');
+});
+
+test('organization: its skills under their repositories, the first one chosen; the filter spans them', async ({ page }) => {
+  await page.goto('./');
+  await scan(page, 'https://github.com/atlas-org');
+
+  const heading = page.getByRole('heading', { level: 2 });
+  await expect(heading).toHaveText('atlas-org 4 skills in 2 repositories');
+  await expect(heading.getByRole('link')).toHaveAttribute('href', 'https://github.com/atlas-org');
+  const skills = page.getByRole('navigation', { name: 'Skills' });
+  await expect(skills.getByRole('heading', { level: 3 })).toHaveText(['atlas-org/alpha', 'atlas-org/gamma']);
+  await expect(skills.getByRole('link', { name: 'atlas-org/gamma' })).toHaveAttribute('href', `https://github.com/atlas-org/gamma/tree/${GAMMA_COMMIT}`);
+  await expect(skills.getByRole('region', { name: 'atlas-org/alpha' }).getByRole('button')).toHaveText([/^code-style/, /^commits/]);
+  await expect(skills.getByRole('region', { name: 'atlas-org/gamma' }).getByRole('button')).toHaveText([/^gradle/, /^release/]);
+  await expect(page.getByRole('note')).toHaveText([/^atlas-org\/gamma: tools\/release\/SKILL\.md: malformed front matter: /]);
+  await expect(chosen(page)).toHaveAccessibleName('code-style: SKILL.md');
+  await expect(chosen(page).getByRole('link')).toHaveAttribute('href', `https://github.com/atlas-org/alpha/blob/${COMMIT}/docs/code-style/SKILL.md`);
+  expect(new URL(page.url()).searchParams.get('repo')).toBe('https://github.com/atlas-org');
+
+  await filterField(page).fill('gradle');
+  await expect(heading).toHaveText('atlas-org 1 of 4 skills in 1 repository');
+  await expect(skills.getByRole('heading', { level: 3 })).toHaveText(['atlas-org/gamma']);
+  await expect(skillButtons(page)).toHaveText(['gradleBuild with Gradle.build/gradle/SKILL.md']);
+  await expect(chosen(page).getByRole('link')).toHaveAttribute('href', `https://github.com/atlas-org/gamma/blob/${GAMMA_COMMIT}/build/gradle/SKILL.md`);
+  await expect(chosen(page).getByLabel('SKILL.md')).toHaveText(GRADLE_MD);
+});
+
+test('organization, with a token: one code search and the repository list; unknown → the CLI’s message, as an alert', async ({ page }) => {
+  await page.goto('./');
+  await page.getByLabel('GitHub token').fill('secret-token');
+  await scan(page, 'github.com/atlas-org');
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('atlas-org 4 skills in 2 repositories');
+  expect(requests).toContain('https://api.github.com/search/code?q=filename:SKILL.md+user:atlas-org&per_page=100&page=1');
+  // The repositories the search does not answer for are read through their trees.
+  expect(requests).toContain('https://api.github.com/users/atlas-org/repos?per_page=100&page=1');
+  expect(requests).toContain(`https://api.github.com/repos/atlas-org/beta/git/trees/${COMMIT}?recursive=1`);
+  expect(authorizations.every((header) => header === 'Bearer secret-token')).toBe(true);
+
+  await scan(page, 'https://github.com/no-such-org');
+  await expect(page.getByRole('alert')).toHaveText('error Organization not found: https://github.com/no-such-org');
+});
+
+test('a token GitHub rejects, the rate limit without one → alerts that name the GitHub token field', async ({ page, context }) => {
+  // GitHub answers 401 to a request with a token, and is past its rate limit without one.
+  await context.route('https://api.github.com/repos/JetBrains/koog', (route) => {
+    const rejected = Boolean(route.request().headers().authorization);
+    return route.fulfill({
+      status: rejected ? 401 : 403,
+      body: JSON.stringify({ message: rejected ? 'Bad credentials' : 'API rate limit exceeded for 192.0.2.1.' }),
+      headers: { 'access-control-allow-origin': '*' },
+    });
+  });
+  await page.goto('./');
+  await scan(page, 'https://github.com/JetBrains/koog');
+  await expect(page.getByRole('alert')).toHaveText('error GitHub rate limit reached; fill in the GitHub token field');
+
+  await page.getByLabel('GitHub token').fill('wrong-token');
+  await scan(page, 'https://github.com/JetBrains/koog');
+  await expect(page.getByRole('alert')).toHaveText('error GitHub rejected the token in the GitHub token field');
+  await expect(page.getByRole('alert')).not.toContainText('GITHUB_TOKEN');
 });

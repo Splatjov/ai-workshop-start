@@ -13,10 +13,14 @@ build-tools-bump-gradle-api — Bumps the Gradle API version that Kotlin Gradle 
 …
 ```
 
-Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests; `npm run test:e2e`, the end-to-end ones on real repositories.
+`./skill-atlas scan https://github.com/JetBrains` scans every repository of an organization;
+`--filter "gradle api"` shows only the skills with those words in their name, description or path.
+
+Set `GITHUB_TOKEN` in the environment for a higher GitHub rate limit, which an organization needs:
+`GITHUB_TOKEN=<token> ./skill-atlas scan …`; in the browser, paste it into the *GitHub token* field. `npm test` runs the tests; `npm run test:e2e`, the end-to-end ones on real repositories.
 A `/tree/<commit>` URL scans that commit: `./skill-atlas scan https://github.com/JetBrains/koog/tree/709079e`.
 
-In the browser: `npm run web` opens a hand-drawn page with a field for the repository link, its
+In the browser: `npm run web` opens a hand-drawn page with a field for the repository or organization link, a token field, a filter, the
 skills and each one's `SKILL.md`, with nine example repositories one click away; `npm run test:web`
 clicks through it in Chromium.
 
