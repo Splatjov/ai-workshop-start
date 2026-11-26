@@ -1,21 +1,42 @@
 # Web view
-`npm run web`: a page with a field for a **GitHub repository link**, its skills, and the
-`SKILL.md` of the chosen one. Hand-drawn: [drawably](https://www.npmjs.com/package/drawably)
-controls and [@sketchyicons/react](https://www.npmjs.com/package/@sketchyicons/react) icons. `npm run web:build`: a static site in `web/dist`.
+`npm run web`: a **celestial atlas**, drawn by hand. A field for a **GitHub repository link**; its
+skills, as an index and as the stars of a globe; and the `SKILL.md` of the chosen one, on a sheet of
+its own. Hand-drawn: [drawably](https://www.npmjs.com/package/drawably) controls,
+[@sketchyicons/react](https://www.npmjs.com/package/@sketchyicons/react) icons, and the globe, in
+WebGL ([three](https://www.npmjs.com/package/three)), in the same pen. `npm run web:build`: a static
+site in `web/dist`.
 ## Behaviour
 - The same scan as the CLI (`createBrowserBackend().scan`), from the browser, over live GitHub,
   *without a token*; the same URLs, `/tree/<ref>` included
 - The repository: `owner/repo` linked at the scanned commit, and `N skills`
 - The skills: sorted by **name**, each with its description's *first sentence* and its path
-- The first skill is chosen; clicking another chooses it
+- The first skill is chosen; clicking another chooses it; in the index, `↓` and `↑` choose the next
+  and the previous
 - The chosen skill: name, the whole description, the link pinned to the scanned commit,
-  `also in <paths>` for copies, and its `SKILL.md` *as scanned*, front matter included, as text
+  `also in <paths>` for copies, its size (`N lines · N B`), and its `SKILL.md` *as scanned*, front
+  matter included, as text, line by line
 - Warnings: under the repository, as notes
 - An unreachable repository, an unknown ref, a non-GitHub link → the CLI's message, as an alert
 - No `SKILL.md` → `0 skills`, nothing to choose
 - `?repo=<URL>` in the page's address scans at once; scanning writes it there, so a scan can be
   shared or reloaded. *Nothing is stored*
+- Nothing scanned yet: three repositories to scan with one click
+## The sky
+- A globe of glass, in pen on paper: its far side shows through, and its lines *boil* as drawably's do
+- Every skill is a **star**, with its name beside it; the longer its `SKILL.md`, the brighter.
+  A copy is a ring beside its skill
+- The directory that holds the skills' folders is their **constellation**: a figure joins its stars
+- The *scanned commit* seeds the sky: the same commit, the same sky
+- Clicking a star chooses its skill; the chosen star is circled in red, and turns to the front
+- Pointing at a skill in the index marks its star, and pointing at a star marks its skill
+- Dragging turns the globe
+- While a scan runs, a meridian sweeps the globe; what cannot be scanned is scribbled over
+- **Day**, pen on paper, or **night**, chalk on cyanotype: the system's at first, then the switch's.
+  *Nothing is stored*
+- `prefers-reduced-motion` → the sky is drawn, and still
+- No WebGL → the page works without the sky
 ## Tests
 - `tests/web.test.ts`: the browser backend's `scan`, on recorded GitHub answers
+- `tests/sky.test.ts`: the chart of a scan, where its stars are, in Node
 - `tests/web/*.spec.ts`, `npm run test:web`: the built page in Chromium, GitHub answered from
-  recordings
+  recordings; what the sky shows is read from its canvas

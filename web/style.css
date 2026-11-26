@@ -1,61 +1,104 @@
+/* A celestial atlas, drawn by hand. Day: pen on paper. Night: chalk on cyanotype. */
+
 :root {
-  --drawably-stroke: #1f3a8a;
-  --drawably-fill: #1f3a8a;
-  color: #1c1917;
-  background: #fbfaf6;
-  font-family: Inter, system-ui, sans-serif;
+  color-scheme: light;
+  --paper: #f3eee2;
+  --sheet: #fcf9f1;
+  --ink: #1b2d88;
+  --ink-rgb: 27 45 136;
+  --pencil: #6d675b;
+  --accent: #e4412b;
+  --marker: #ffc21a;
+  --warn: #a8530c;
+  --shade: 30 34 80;
+  --grain: 0.5;
+  --sky-blend: multiply;
+  --wash-blend: multiply;
+
+  --drawably-stroke: var(--ink);
+  --drawably-fill: var(--ink);
+  --drawably-paper: var(--paper);
+  --drawably-error: var(--accent);
+
+  --pen: 'Drawably Pen', 'Fraunces Variable', cursive;
+  --serif: 'Fraunces Variable', 'Iowan Old Style', Georgia, serif;
+  --mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+  --ease: cubic-bezier(0.2, 0.7, 0.1, 1);
+
+  font-family: var(--serif);
+  font-optical-sizing: auto;
+  color: var(--ink);
+  background: var(--paper);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+:root[data-theme='night'] {
+  color-scheme: dark;
+  --paper: #0c2760;
+  --sheet: #113172;
+  --ink: #eef3ff;
+  --ink-rgb: 238 243 255;
+  --pencil: #a9bdec;
+  --accent: #ffc247;
+  --marker: #4f86ff;
+  --warn: #ffd58f;
+  --shade: 2 8 30;
+  --grain: 0.35;
+  --sky-blend: screen;
+  --wash-blend: screen;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
 }
 
 body {
-  margin: 0;
+  overflow-x: hidden;
 }
 
-main {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 32px 24px 64px;
+/* The page: paper with a grain, a dot grid as in a notebook, darker towards its edges. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(130% 100% at 50% 42%, transparent 52%, rgb(var(--shade) / 0.13) 100%),
+    radial-gradient(circle at 1px 1px, rgb(var(--ink-rgb) / 0.16) 0.9px, transparent 1.5px) 13px 13px / 26px 26px;
 }
 
-h1,
-h2,
-h3 {
-  font-family: 'Drawably Pen', Inter, system-ui, sans-serif;
-  font-weight: normal;
-  display: flex;
-  align-items: center;
-  gap: 10px;
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: var(--grain);
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='n' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .2  0 0 0 0 .17  0 0 0 0 .12  0 0 0 .7 -.22'/%3E%3C/filter%3E%3Crect width='260' height='260' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-h1 {
-  font-size: 44px;
-  margin: 0 0 4px;
+/* drawably's sketches take the page's own type, not Inter. */
+.drawably-host {
+  font-family: inherit;
 }
 
-header p {
-  margin: 0 0 24px;
-  color: #57534e;
+::selection {
+  background: var(--marker);
+  color: #14204f;
 }
 
-.scan {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.scan .drawably-inputbox {
-  flex: 1;
-  display: block;
-}
-
-.scan input {
-  width: 100%;
-  font-size: 16px;
-}
-
-.scan button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+a {
+  color: inherit;
 }
 
 .visually-hidden {
@@ -66,126 +109,1097 @@ header p {
   clip-path: inset(50%);
 }
 
+/* ---- the sky: one canvas behind the whole page, and the names beside its stars ---------------- */
+
+.sky {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  mix-blend-mode: var(--sky-blend);
+}
+
+.names {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.names span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  will-change: transform, opacity;
+  transition: opacity 180ms linear;
+}
+
+/* Each name's element is a point, at its star; the name hangs beside it. */
+.names i {
+  position: absolute;
+  top: 0;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.names [data-star] i {
+  left: var(--gap, 12px);
+  transform: translateY(-50%);
+  font: 400 17px/1.15 var(--pen);
+  color: var(--ink);
+  padding: 1px 5px 2px;
+  border-radius: 9px;
+  /* A little paper under the letters, so the lines behind do not strike them through. */
+  background: color-mix(in srgb, var(--paper) 80%, transparent);
+  box-shadow: 0 0 5px 3px color-mix(in srgb, var(--paper) 80%, transparent);
+}
+
+.names [data-star][data-side='left'] i {
+  left: auto;
+  right: var(--gap, 12px);
+}
+
+.names [data-star][data-side='above'] i {
+  left: var(--shift, 0px);
+  transform: translate(-50%, calc(-100% - var(--gap, 12px) - 4px));
+}
+
+.names [data-star]:is([data-pointed], [data-chosen]) {
+  z-index: 1;
+}
+
+.names [data-star][data-chosen] i {
+  color: var(--accent);
+  font-size: 20px;
+}
+
+.names [data-constellation] i {
+  transform: translate(-50%, -50%);
+  font: 500 9.5px/1 var(--mono);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--pencil);
+}
+
+:root[data-sky='none'] :is(.sky, .names),
+:root[data-sky='drawing'] .names {
+  display: none;
+}
+
+/* ---- the plate: a neatline round the page, and what is written in its margin ------------------ */
+
+.neatline {
+  position: fixed;
+  inset: 12px;
+  z-index: 3;
+  padding: 0;
+  pointer-events: none;
+  --drawably-width: 1.4;
+}
+
+.margin {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  font: 500 10px/1 var(--mono);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--pencil);
+}
+
+.margin span {
+  position: absolute;
+  white-space: pre;
+}
+
+.margin .plate-name {
+  left: 31px;
+  top: 50%;
+  writing-mode: vertical-rl;
+  transform: translateY(-50%) rotate(180deg);
+}
+
+.margin .aim {
+  left: 56px;
+  bottom: 27px;
+  font-variant-numeric: tabular-nums;
+}
+
+.margin .epoch {
+  right: 56px;
+  bottom: 27px;
+}
+
+.exposure {
+  position: fixed;
+  top: 30px;
+  right: 40px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+/* The night spreads from the switch: the page's own animation draws the circle. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* ---- the page ---------------------------------------------------------------------------------- */
+
+main {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  min-height: 100dvh;
+  padding: 44px 64px 52px 78px;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--pen);
+  font-weight: normal;
+  margin: 0;
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 22px;
+  font: 500 11px/1 var(--mono);
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--pencil);
+}
+
+h1 {
+  position: relative;
+  width: max-content;
+  max-width: 100%;
+  line-height: 0.8;
+  letter-spacing: -0.01em;
+}
+
+h1 .spark {
+  position: absolute;
+  flex: none;
+}
+
+.tagline {
+  margin: 0;
+  font-style: italic;
+  font-weight: 340;
+  font-variation-settings: 'SOFT' 100, 'WONK' 1;
+  color: var(--ink);
+}
+
+/* The field: a repository link, and the pen that scans it. */
+.scan {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--mono);
+}
+
+.scan > svg {
+  flex: none;
+}
+
+.scan .drawably-inputbox {
+  flex: 1;
+  display: block;
+  min-width: 0;
+}
+
+.scan input {
+  width: 100%;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.scan input::placeholder {
+  color: rgb(var(--ink-rgb) / 0.42);
+}
+
+.scan button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: 600 15px/1.4 var(--mono);
+  padding: 8px 18px;
+  white-space: nowrap;
+}
+
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin: 22px 0 0;
+  font: italic 340 16px/1.3 var(--serif);
+  color: var(--pencil);
+}
+
+.examples span {
+  margin-right: 4px;
+}
+
+.examples button {
+  font: 500 13px/1.4 var(--mono);
+  padding: 5px 12px;
+}
+
 .error {
-  margin-top: 24px;
-  color: #b42318;
+  margin-top: 26px;
+  color: var(--accent);
+  font: 500 14px/1.45 var(--mono);
+  width: auto;
+  max-width: 100%;
+  align-items: baseline;
+  overflow-wrap: anywhere;
+}
+
+.error [data-tag] {
+  flex: none;
+  white-space: nowrap;
+  padding: 3px 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+/* ---- the globe's place on the page; the globe itself is on the canvas -------------------------- */
+
+.globe {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  cursor: grab;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.globe[data-over] {
+  cursor: pointer;
+}
+
+.globe[data-dragging] {
+  cursor: grabbing;
+}
+
+.globe .still {
+  display: none;
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: min(100%, 100vh);
+  height: 100%;
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 0.7;
+  stroke-linecap: round;
+  opacity: 0.8;
+}
+
+:root[data-sky='none'] .globe {
+  cursor: default;
+}
+
+:root[data-sky='none'] .globe .still {
+  display: block;
+}
+
+.hint,
+.legend {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  margin: 0;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 400 19px/1 var(--pen);
+  color: var(--pencil);
+  transition: opacity 400ms ease;
+}
+
+.globe[data-turned] .hint,
+:root:not([data-sky='drawn']) :is(.hint, .legend, .note, .drawably-arrow) {
+  opacity: 0;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: max-content;
+  max-width: 100%;
+  white-space: normal;
+  font: 500 9.5px/1 var(--mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--pencil);
+}
+
+.legend .mark {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-left: 10px;
+}
+
+.legend .mark:first-child {
+  margin-left: 0;
+}
+
+.legend .star {
+  background: var(--ink);
+}
+
+.legend .copy {
+  border: 1.2px solid var(--ink);
+}
+
+.legend span {
+  margin-left: 12px;
+  opacity: 0.8;
+}
+
+.legend .turn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.globe[data-turned] .legend .turn {
+  display: none;
+}
+
+.plate[data-view='chart'] .hint {
+  bottom: 24px;
+  font-size: 16px;
+}
+
+/* On the cover it is a pencil note, at the globe's lower left. */
+.plate[data-view='cover'] .hint {
+  left: 3%;
+  bottom: 15%;
+  transform: rotate(-5deg);
+}
+
+.plate[data-view='chart'] .legend + .hint,
+.plate[data-view='chart'] .hint:has(+ .legend) {
+  display: none;
+}
+
+/* A note in the margin of the cover, and the arrow from it to the sky. */
+.note {
+  position: absolute;
+  left: 2%;
+  top: 9%;
+  margin: 0;
+  font: 400 23px/1.05 var(--pen);
+  color: var(--accent);
+  transform: rotate(-7deg);
+  pointer-events: none;
+  transition: opacity 600ms ease 1.6s;
+}
+
+.note-target {
+  position: absolute;
+  left: 27%;
+  top: 27%;
+  width: 1px;
+  height: 1px;
+}
+
+.drawably-arrow {
+  transition: opacity 600ms ease 1.6s;
+}
+
+/* ---- the cover: nothing scanned yet ------------------------------------------------------------ */
+
+.plate[data-view='cover'] main {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.02fr);
+  align-items: center;
+  column-gap: 3vw;
+}
+
+.plate[data-view='cover'] .masthead {
+  max-width: 700px;
+  padding-bottom: 2vh;
+}
+
+.plate[data-view='cover'] h1 {
+  font-size: clamp(5.5rem, 13.2vw, 13.6rem);
+  margin-left: -0.04em;
+}
+
+.plate[data-view='cover'] h1 .word {
+  display: block;
+}
+
+.plate[data-view='cover'] h1 .word + .word {
+  margin-left: 0.42em;
+  margin-top: 0.02em;
+}
+
+.plate[data-view='cover'] h1 .spark {
+  right: -0.02em;
+  top: 0.06em;
+  width: 0.26em;
+  height: 0.26em;
+  transform: rotate(12deg);
+}
+
+.plate[data-view='cover'] .tagline {
+  margin: 30px 0 34px;
+  font-size: clamp(1.25rem, 1.9vw, 1.75rem);
+}
+
+.plate[data-view='cover'] .scan {
+  max-width: 600px;
+}
+
+.plate[data-view='cover'] .globe {
+  align-self: stretch;
+  justify-self: center;
+  /* As wide as leaves room under the globe for its shadow. */
+  width: min(100% + 40px, (100dvh - 34px) / 1.38);
+  min-height: min(76vh, 760px);
+  margin: -30px -40px -36px -2vw;
+}
+
+.plate[data-view='cover'] .masthead > * {
+  animation: rise 800ms var(--ease) both;
+}
+
+.plate[data-view='cover'] .masthead > :nth-child(2) {
+  animation-delay: 80ms;
+}
+
+.plate[data-view='cover'] .masthead > :nth-child(3) {
+  animation-delay: 200ms;
+}
+
+.plate[data-view='cover'] .masthead > :nth-child(4) {
+  animation-delay: 300ms;
+}
+
+.plate[data-view='cover'] .masthead > :nth-child(n + 5) {
+  animation-delay: 400ms;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+/* The title is written, a word at a time. */
+.plate[data-view='cover'] h1 .word {
+  animation: write 950ms cubic-bezier(0.5, 0, 0.2, 1) 150ms both;
+}
+
+.plate[data-view='cover'] h1 .word + .word {
+  animation-delay: 520ms;
+}
+
+.plate[data-view='cover'] h1 .spark {
+  animation: rise 500ms var(--ease) 1300ms both;
+}
+
+@keyframes write {
+  from {
+    clip-path: inset(-20% 100% -20% -10%);
+  }
+  to {
+    clip-path: inset(-20% -10% -20% -10%);
+  }
+}
+
+/* ---- the chart: a repository scanned ----------------------------------------------------------- */
+
+.plate[data-view='chart'] main {
+  height: 100dvh;
+  padding: 26px 44px 44px 62px;
+  grid-template-columns: clamp(270px, 21vw, 380px) minmax(0, 1fr) clamp(400px, 32vw, 580px);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 16px 26px;
+}
+
+.plate[data-view='chart'] .masthead {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding-right: 118px;
+  min-width: 0;
+  animation: rise 600ms var(--ease) both;
+}
+
+.plate[data-view='chart'] .eyebrow {
+  display: none;
+}
+
+.plate[data-view='chart'] h1 {
+  font-size: 2.6rem;
+  line-height: 1;
+  white-space: nowrap;
+  padding-right: 0.5em;
+  flex: none;
+}
+
+.plate[data-view='chart'] h1 .spark {
+  right: 0;
+  top: -0.08em;
+  width: 0.42em;
+  height: 0.42em;
+}
+
+.plate[data-view='chart'] .tagline {
+  flex: none;
+  font-size: 15px;
+  color: var(--pencil);
+}
+
+.plate[data-view='chart'] .scan {
+  flex: 1;
+  min-width: 0;
+  max-width: 640px;
+  margin-left: auto;
+}
+
+.plate[data-view='chart'] .globe {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.result {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: grid;
+  grid-template-columns: subgrid;
+  min-height: 0;
+  pointer-events: none;
+}
+
+.result > * {
+  pointer-events: auto;
+}
+
+.ledger {
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  animation: unfold-left 700ms var(--ease) both;
+}
+
+@keyframes unfold-left {
+  from {
+    opacity: 0;
+    transform: translateX(-18px);
+  }
 }
 
 .repository {
-  margin: 32px 0 8px;
-  font-size: 28px;
-}
-
-.repository .drawably-badge {
-  font-family: Inter, system-ui, sans-serif;
-  font-size: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  font-size: 30px;
+  line-height: 1.05;
 }
 
 .repository a {
-  color: inherit;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 5px;
+  text-decoration-color: rgb(var(--ink-rgb) / 0.4);
+  overflow-wrap: anywhere;
+}
+
+.repository a:hover {
+  text-decoration-color: var(--accent);
+}
+
+.repository .drawably-badge {
+  padding: 5px 11px;
+  font: 600 12px/1.5 var(--mono);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
 .warning {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  color: #b54708;
-  margin: 4px 0;
-}
-
-.atlas {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) 2fr;
-  gap: 24px;
-  margin-top: 16px;
-  align-items: start;
-}
-
-@media (max-width: 760px) {
-  .atlas {
-    grid-template-columns: 1fr;
-  }
-}
-
-nav ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-nav button {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  text-align: left;
-  border: 0;
-  border-left: 3px solid transparent;
-  background: none;
-  padding: 8px 12px;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-}
-
-nav button:hover {
-  background: #f1efe7;
-}
-
-nav button[aria-current='true'] {
-  border-left-color: #1f3a8a;
-  background: #eef2ff;
-}
-
-nav button span {
-  color: #57534e;
-  font-size: 14px;
-}
-
-nav button code {
-  color: #78716c;
-  font-size: 12px;
+  margin: 10px 0 0;
+  font: italic 380 13.5px/1.4 var(--serif);
+  color: var(--warn);
   overflow-wrap: anywhere;
 }
 
-.skill {
-  padding: 20px 24px;
+.warning svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.void {
+  margin: 18px 0 0;
+  font: italic 340 19px/1.35 var(--serif);
+  color: var(--pencil);
+  max-width: 17em;
+}
+
+/* The index of stars. */
+nav {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  margin-top: 14px;
+}
+
+nav ul {
+  flex: 1;
+  list-style: none;
+  margin: 0 -8px 0 -10px;
+  padding: 4px 8px 12px 0;
+  overflow-y: auto;
+  counter-reset: star;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--ink-rgb) / 0.3) transparent;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 22px), transparent 100%);
+}
+
+nav li {
+  counter-increment: star;
+  animation: rise 500ms var(--ease) both;
+  animation-delay: calc(120ms + var(--i) * 38ms);
+}
+
+nav button {
+  position: relative;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  width: 100%;
+  padding: 9px 10px 10px 10px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  outline: none;
+}
+
+nav button::before {
+  content: counter(star, decimal-leading-zero);
+  grid-row: 1 / span 3;
+  padding-top: 7px;
+  font: italic 340 13px/1 var(--serif);
+  font-variant-numeric: tabular-nums;
+  color: var(--pencil);
+}
+
+nav button > * {
+  grid-column: 2;
   min-width: 0;
 }
 
+nav button strong {
+  justify-self: start;
+  max-width: 100%;
+  font: 400 25px/1.12 var(--pen);
+  overflow-wrap: anywhere;
+  opacity: 0.86;
+  transition: opacity 160ms ease;
+}
+
+nav button span:not(.drawably-circle) {
+  margin-top: 3px;
+  font: 380 14px/1.36 var(--serif);
+  color: rgb(var(--ink-rgb) / 0.8);
+}
+
+nav button code {
+  margin-top: 4px;
+  font: 400 10.5px/1.4 var(--mono);
+  color: var(--pencil);
+  overflow-wrap: anywhere;
+}
+
+nav button:is(:hover, :focus-visible, [data-pointed]) strong,
+nav button[aria-current='true'] strong {
+  opacity: 1;
+}
+
+/* Under the pointer, here or on the globe: a swipe of the marker. */
+nav button:is(:hover, :focus-visible, [data-pointed]):not([aria-current='true']) strong {
+  background: linear-gradient(transparent 58%, color-mix(in srgb, var(--marker) 62%, transparent) 58% 92%, transparent 92%);
+}
+
+nav button:focus-visible {
+  box-shadow: inset 0 0 0 1.5px rgb(var(--ink-rgb) / 0.55);
+}
+
+nav button[aria-current='true']::before {
+  content: '✦';
+  font: 400 15px/1 var(--serif);
+  padding-top: 6px;
+  color: var(--accent);
+}
+
+/* The chosen skill's sheet: lying on the atlas, its SKILL.md as scanned. */
+.skill {
+  grid-column: 3;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  padding: 26px 28px 22px;
+  background: var(--sheet);
+  border-radius: 12px;
+  box-shadow:
+    0 1px 0 rgb(var(--shade) / 0.05),
+    0 22px 44px -20px rgb(var(--shade) / 0.42),
+    0 3px 10px -4px rgb(var(--shade) / 0.2);
+  transform-origin: 0 50%;
+  animation: turn-page 760ms var(--ease) both;
+}
+
+@keyframes turn-page {
+  from {
+    opacity: 0;
+    transform: perspective(1400px) rotateY(-34deg) translateX(26px);
+  }
+  to {
+    transform: perspective(1400px) rotateY(0deg);
+  }
+}
+
+/* Only the SKILL.md gives way when the sheet is short of room. */
+.skill > :not(pre) {
+  flex-shrink: 0;
+}
+
+/* A strip of tape holds it down. */
+.skill::after {
+  content: '';
+  position: absolute;
+  top: -11px;
+  left: 50%;
+  width: 104px;
+  height: 24px;
+  transform: translateX(-50%) rotate(-2.2deg);
+  background: color-mix(in srgb, var(--marker) 58%, transparent);
+  clip-path: polygon(0 0, 3% 22%, 0 44%, 3% 66%, 0 100%, 100% 100%, 97% 78%, 100% 56%, 97% 34%, 100% 0);
+  box-shadow: 0 1px 2px rgb(var(--shade) / 0.15);
+}
+
+.skill .size {
+  position: absolute;
+  top: 20px;
+  right: 26px;
+  margin: 0;
+  font: 500 10px/1 var(--mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--pencil);
+}
+
 .skill h3 {
-  margin: 0 0 8px;
-  font-size: 26px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  /* A long name is written smaller, so it keeps to a line or two. */
+  font-size: calc(clamp(32px, 2.9vw, 46px) * max(0.6, var(--fit, 1)));
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.skill h3 svg {
+  flex: none;
+}
+
+.skill .description {
+  margin: 12px 0 0;
+  font: italic 360 16.5px/1.42 var(--serif);
+  font-variation-settings: 'SOFT' 100;
+  max-height: 8.52em;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .skill .links {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  font-size: 14px;
-  color: #57534e;
+  gap: 4px 14px;
+  margin: 12px 0 0;
+  font: 400 11.5px/1.5 var(--mono);
+  color: var(--pencil);
 }
 
 .skill .links a {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  color: #1f3a8a;
+  gap: 5px;
+  color: var(--ink);
+  text-underline-offset: 3px;
+  text-decoration-color: rgb(var(--ink-rgb) / 0.4);
   overflow-wrap: anywhere;
 }
 
+.skill .links a:hover {
+  text-decoration-color: var(--accent);
+}
+
+.skill .links span {
+  overflow-wrap: anywhere;
+}
+
+/* A notebook page: numbered lines, a red rule down the margin. */
 .skill pre {
-  margin: 16px 0 0;
-  padding: 16px;
-  background: #f5f3ec;
-  border-radius: 6px;
+  position: relative;
+  flex: 1;
+  min-height: 120px;
+  margin: 16px -10px 0;
+  padding: 12px 12px 14px 0;
   overflow: auto;
-  max-height: 70vh;
-  font-size: 13px;
-  line-height: 1.5;
+  counter-reset: line;
+  font: 400 12.5px/1.72 var(--mono);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  tab-size: 2;
+  color: var(--ink);
+  background:
+    linear-gradient(to right, transparent 43px, color-mix(in srgb, var(--accent) 55%, transparent) 43px 44px, transparent 44px),
+    repeating-linear-gradient(to bottom, transparent 0 calc(1.72em - 1px), rgb(var(--ink-rgb) / 0.09) calc(1.72em - 1px) 1.72em) 0 12px;
+  background-attachment: local;
+  border-top: 1px solid rgb(var(--ink-rgb) / 0.16);
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--ink-rgb) / 0.3) transparent;
+  outline: none;
+}
+
+.skill pre:focus-visible {
+  box-shadow: inset 0 0 0 1.5px rgb(var(--ink-rgb) / 0.5);
+}
+
+.skill pre .line {
+  display: block;
+  position: relative;
+  padding-left: 56px;
+  counter-increment: line;
+}
+
+.skill pre .line::before {
+  content: counter(line);
+  position: absolute;
+  left: 0;
+  width: 36px;
+  text-align: right;
+  font-size: 10px;
+  color: var(--pencil);
+  opacity: 0.75;
+  user-select: none;
+}
+
+.skill pre .matter {
+  background: linear-gradient(to right, transparent 50px, color-mix(in srgb, var(--marker) 30%, transparent) 50px);
+  color: rgb(var(--ink-rgb) / 0.86);
+}
+
+.skill pre .matter b {
+  font-weight: 700;
+}
+
+.skill pre .heading {
+  font-weight: 700;
+}
+
+.skill pre .fence {
+  color: rgb(var(--ink-rgb) / 0.72);
+}
+
+/* The marker wash is light on a dark page. */
+.drawably-svg .drawably-wash {
+  mix-blend-mode: var(--wash-blend);
+}
+
+h1 .drawably-wash {
+  stroke-opacity: 0.55;
+}
+
+/* ---- narrower pages: the chart above, the index and the sheet below ---------------------------- */
+
+@media (max-width: 1100px) {
+  .plate[data-view='chart'] main {
+    height: auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    grid-template-rows: auto min(54vh, 460px) auto;
+    padding: 26px 34px 60px 52px;
+  }
+
+  .plate[data-view='chart'] .masthead {
+    flex-wrap: wrap;
+  }
+
+  .plate[data-view='chart'] .tagline {
+    display: none;
+  }
+
+  /* The page scrolls here: nothing is written in the margin, over what scrolls past. */
+  .margin {
+    display: none;
+  }
+
+  .plate[data-view='chart'] .globe {
+    grid-column: 1 / -1;
+  }
+
+  .result {
+    grid-row: 3;
+    grid-template-columns: subgrid;
+  }
+
+  .skill {
+    grid-column: 2;
+    align-self: start;
+    position: sticky;
+    top: 24px;
+    max-height: calc(100dvh - 48px);
+  }
+
+  nav ul {
+    overflow: visible;
+    mask-image: none;
+  }
+}
+
+@media (max-width: 860px) {
+  main,
+  .plate[data-view='chart'] main {
+    padding: 64px 26px 56px 30px;
+  }
+
+  .plate[data-view='cover'] main {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    row-gap: 8px;
+  }
+
+  .plate[data-view='cover'] h1 {
+    font-size: clamp(4.6rem, 25vw, 9rem);
+  }
+
+  .plate[data-view='cover'] .globe {
+    min-height: min(92vw, 520px);
+    margin: 0 -12px;
+  }
+
+  .plate[data-view='chart'] main {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto min(88vw, 440px) auto;
+  }
+
+  .plate[data-view='chart'] .masthead {
+    padding-right: 0;
+    gap: 14px;
+  }
+
+  .plate[data-view='chart'] .scan {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+
+  .legend span:not(.turn) {
+    display: none;
+  }
+
+  .legend .turn {
+    margin-left: 12px;
+  }
+
+  .result {
+    row-gap: 30px;
+  }
+
+  .skill {
+    grid-column: 1;
+    position: relative;
+    top: 0;
+    max-height: none;
+  }
+
+  .skill pre {
+    max-height: 70vh;
+  }
+
+
+  .neatline {
+    inset: 7px;
+  }
+
+  .exposure {
+    top: 22px;
+    right: 24px;
+  }
+
+  .note {
+    font-size: 19px;
+    top: 2%;
+  }
+
+  .scan {
+    flex-wrap: wrap;
+  }
+
+  .scan > svg {
+    display: none;
+  }
+
+  .scan .drawably-inputbox {
+    flex: 1 1 220px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 1ms !important;
+  }
 }

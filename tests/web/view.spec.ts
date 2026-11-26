@@ -1,38 +1,17 @@
 // spec/web.md: the page, as a user sees it, over recorded GitHub answers.
-import { expect, test, type Page } from '@playwright/test';
-import { BROKEN_MD, COMMIT, COMMITS_MD, RECORDING, STYLE_MD } from './recording.ts';
+import { expect, test } from '@playwright/test';
+import { chosen, recorded, scan, skillButtons } from './github.ts';
+import { BROKEN_MD, COMMIT, COMMITS_MD, STYLE_MD } from './recording.ts';
 
 const blob = `https://github.com/JetBrains/atlas-demo/blob/${COMMIT}`;
 let requests: string[];
 let errors: string[];
 
 test.beforeEach(async ({ page }) => {
-  requests = [];
-  errors = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  // GitHub answers from the recording; anything else on GitHub fails, as the network would.
-  await page.route(/^https:\/\/(api\.github\.com|raw\.githubusercontent\.com)\//, async (route) => {
-    const url = route.request().url();
-    requests.push(url);
-    const answer = RECORDING[url];
-    if (!answer) return route.abort('internetdisconnected');
-    await route.fulfill({
-      status: answer.status,
-      body: typeof answer.body === 'string' ? answer.body : JSON.stringify(answer.body),
-      headers: { 'access-control-allow-origin': '*' },
-    });
-  });
+  ({ requests, errors } = await recorded(page));
 });
 
 test.afterEach(() => expect(errors, 'errors in the page').toEqual([]));
-
-async function scan(page: Page, url: string) {
-  await page.getByLabel('Repository link').fill(url);
-  await page.getByRole('button', { name: 'Scan' }).click();
-}
-
-const skillButtons = (page: Page) => page.getByRole('navigation', { name: 'Skills' }).getByRole('button');
-const chosen = (page: Page) => page.getByRole('region', { name: /: SKILL\.md$/ });
 
 test('a field for the repository link, hand-drawn icons, nothing scanned yet', async ({ page }) => {
   await page.goto('./');
@@ -77,6 +56,11 @@ test('choosing a skill: the whole description, the pinned link, its copies and i
   await expect(skill.getByRole('link')).toHaveAttribute('href', `${blob}/.claude/skills/commits/SKILL.md`);
   await expect(skill).toContainText('also in .github/skills/commits/SKILL.md');
   await expect(skill.getByLabel('SKILL.md')).toHaveText(COMMITS_MD);
+  // Its size, and its text line by line, as scanned: the lines, joined, are the file.
+  await expect(skill).toContainText(`7 lines · ${new TextEncoder().encode(COMMITS_MD).length} B`);
+  await expect(skill.locator('pre .line')).toHaveCount(7);
+  expect(await skill.locator('pre').evaluate((pre) => pre.textContent)).toBe(COMMITS_MD);
+  await expect(skill.locator('pre .line.matter')).toHaveText(['---', 'name: commits', /^description: /, '---']);
 });
 
 test('warnings: under the repository, as notes; the skill is still shown', async ({ page }) => {
