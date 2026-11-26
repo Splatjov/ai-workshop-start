@@ -42,8 +42,9 @@ header p {
   gap: 12px;
 }
 
-.scan .drawably-input {
+.scan .drawably-inputbox {
   flex: 1;
+  display: block;
 }
 
 .scan input {
@@ -73,6 +74,11 @@ header p {
 .repository {
   margin: 32px 0 8px;
   font-size: 28px;
+}
+
+.repository .drawably-badge {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
 }
 
 .repository a {

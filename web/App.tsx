@@ -118,7 +118,8 @@ function Result({
 
       {warnings.map((warning) => (
         <p className="warning" role="note" key={warning}>
-          <AlertTriangle size={18} color="#b54708" /> {warning}
+          <AlertTriangle size={18} color="#b54708" />
+          {warning}
         </p>
       ))}
 

@@ -39,7 +39,7 @@ test('a field for the repository link, hand-drawn icons, nothing scanned yet', a
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Skill Atlas/);
   await expect(page.getByLabel('Repository link')).toHaveAttribute('placeholder', 'https://github.com/owner/repo');
   await expect(page.locator('main svg path').first()).toBeAttached(); // the sketchy icons, as SVG
-  await expect(page.locator('.drawably-input svg, .drawably-button svg').first()).toBeAttached(); // drawably's sketch
+  await expect(page.locator('.drawably-inputbox svg, .drawably-button svg').first()).toBeAttached(); // drawably's sketch
   await expect(page.getByRole('region', { name: 'Scan result' })).toHaveCount(0);
   expect(requests).toEqual([]);
 });
