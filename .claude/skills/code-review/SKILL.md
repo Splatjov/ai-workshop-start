@@ -304,7 +304,8 @@ every finding, so new ones cost a round each. Report only
 - an `important` problem the earlier review missed.
 No new nits about code that review already saw. A finding the fix automation declined, with its
 reason, in its `air-review-fix` comment: raise it again only if you can refute the reason, and say
-how. The same finding declined twice goes under "Needs a human", not under Findings.
+how. The same finding declined twice goes under "Needs a human", not under Findings. A finding
+declined with `decided in Slack: …` was settled by a person: never raise it again.
 
 ## 6. Report
 
