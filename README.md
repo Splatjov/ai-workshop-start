@@ -25,7 +25,8 @@ A repository's scan is kept in `~/.cache/skill-atlas` (or `$XDG_CACHE_HOME/skill
 an unchanged commit asks GitHub for that commit only. Delete the directory to start over.
 
 Deployed: every push to `main` puts the web view on GitHub Pages, at
-https://splatjov.github.io/ai-workshop-start/ ([pages.yml](.github/workflows/pages.yml)).
+https://splatjov.github.io/ai-workshop-start/ ([pages.yml](.github/workflows/pages.yml)), once Pages is
+turned on for the repository (Settings → Pages → Source: GitHub Actions).
 
 In the browser: `npm run web` opens an atlas of worlds, drawn by hand. Every repository you scan is
 a world of a system, and the more alike the skills of two repositories, the closer their worlds

@@ -18,7 +18,11 @@ test('the Pages workflow deploys the build of main, on every push and by hand', 
   assert.match(pages, /pages: write/);
   assert.match(pages, /id-token: write/);
   assert.match(pages, /npm ci\n\s+- run: npm run web:build/);
-  assert.match(pages, /enablement: true/);
+  // Pages is turned on by a person, once: `enablement` needs a token other than GITHUB_TOKEN,
+  // so the workflow neither asks for it nor passes a token of its own.
+  assert.match(pages, /- uses: actions\/configure-pages@v\d+\n\s+- uses:/);
+  assert.doesNotMatch(pages, /enablement/);
+  assert.doesNotMatch(pages, /^\s+token:/m);
   assert.match(pages, /actions\/upload-pages-artifact@v\d+\n\s+with:\n\s+path: web\/dist/);
   assert.match(pages, /actions\/deploy-pages@v\d+/);
   assert.equal(JSON.parse(read('package.json')).scripts['web:build'], 'vite build web');

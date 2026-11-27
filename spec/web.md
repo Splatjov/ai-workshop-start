@@ -11,7 +11,10 @@ site in `web/dist`, with relative paths, so it works from any path.
 ## Deployed
 - On every push to `main` (and by hand, `workflow_dispatch`), `.github/workflows/pages.yml` runs
   `npm run web:build` and puts `web/dist` on GitHub Pages, at
-  `https://<owner>.github.io/<repository>/`; the workflow turns Pages on if it is off
+  `https://<owner>.github.io/<repository>/`
+- Pages is turned on by a person, once: Settings → Pages → Source: **GitHub Actions**. The
+  workflow does *not* do it (its `GITHUB_TOKEN` cannot, and it takes no other token): until then
+  its run fails at `configure-pages`, and nothing is deployed
 - The deployed page is the same static site: it scans live GitHub from the visitor's browser, with
   their own token if they paste one; nothing is kept on a server
 ## Behaviour
