@@ -98,13 +98,17 @@ can be posted; the summary says so (a person runs `/invite @AI Workshop Bot` the
 
 ```bash
 S=.agents/skills/status-update/status.ts
-node $S --repo "$REPO" --since "$SINCE" --until "$UNTIL" > /tmp/status-post.md
-node $S --repo "$REPO" --since "$SINCE" --until "$UNTIL" --json > /tmp/status-items.json
+node $S --repo "$REPO" --since "$SINCE" --until "$UNTIL" > /tmp/status-post.md; echo "post exit=$?"
+node $S --repo "$REPO" --since "$SINCE" --until "$UNTIL" --json > /tmp/status-items.json; echo "items exit=$?"
 cat /tmp/status-post.md
 ```
 
-An empty `/tmp/status-post.md` → **nothing new: nothing is posted**. Stop; the summary says
-"Nothing since <since>".
+Either exit is not 0 (`gh` failed: no login, a rate limit, no network; or a wrong time) → stop:
+nothing is posted, the state is `stopped`, and the summary quotes the `status:` line the script
+printed. A failed run leaves an empty file too: that is **not** "nothing new".
+
+Both exits 0 and an empty `/tmp/status-post.md` → **nothing new: nothing is posted**. Stop; the
+summary says "Nothing since <since>".
 
 ## 4. Check the claims
 

@@ -194,7 +194,9 @@ function main() {
   if (out) process.stdout.write(`${out}\n`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Not a comparison of import.meta.url with argv[1]: that is false through a symlink, or with a
+// space in the path, and the script would then print nothing and exit 0, like "nothing new".
+if (import.meta.main) {
   try {
     main();
   } catch (e) {

@@ -1,7 +1,11 @@
 // .agents/skills/status-update: the status post, from what GitHub answers, as the skill says.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import {
   formatRange, parseTime, statusItems, statusPost,
   type ClosedIssue, type GitHubState, type MergedPr, type OpenPr,
@@ -139,6 +143,25 @@ test('a time needs its zone', () => {
   assert.equal(parseTime('2026-11-27T08:30:00Z', '--since').toISOString(), '2026-11-27T08:30:00.000Z');
   assert.throws(() => parseTime('2026-11-27T09:30', '--since'), /not a time with a zone/);
   assert.throws(() => parseTime('yesterday', '--since'), /not a time with a zone/);
+});
+
+test('the script runs through a symlink and from a path with a space: a failure is an error, never an empty post', () => {
+  const skillDir = fileURLToPath(new URL('../.agents/skills/status-update', import.meta.url));
+  const dir = mkdtempSync(join(tmpdir(), 'status update '));
+  try {
+    symlinkSync(skillDir, join(dir, 'linked skill'), 'dir');
+    for (const script of [join(skillDir, 'status.ts'), join(dir, 'linked skill', 'status.ts')]) {
+      // A time without its zone fails before anything is asked of GitHub.
+      const run = spawnSync(process.execPath, [script, '--since', '2026-11-27T09:30'], { encoding: 'utf8' });
+      assert.equal(run.status, 1, script);
+      assert.equal(run.stdout, '', script);
+      assert.match(run.stderr, /^status: --since: .+ is not a time with a zone/, script);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  const skill = readFileSync(join(skillDir, 'SKILL.md'), 'utf8');
+  assert.match(skill, /Either exit is not 0 .+ → stop:\s+nothing is posted/);
 });
 
 test('SKILL.md: its name, and the marks and channel rules the script follows', () => {
