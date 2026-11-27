@@ -7,7 +7,13 @@ sheet of its own. Hand-drawn:
 [drawably](https://www.npmjs.com/package/drawably) controls,
 [@sketchyicons/react](https://www.npmjs.com/package/@sketchyicons/react) icons, and the worlds, in
 WebGL ([three](https://www.npmjs.com/package/three)), in the same pen. `npm run web:build`: a static
-site in `web/dist`.
+site in `web/dist`, with relative paths, so it works from any path.
+## Deployed
+- On every push to `main` (and by hand, `workflow_dispatch`), `.github/workflows/pages.yml` runs
+  `npm run web:build` and puts `web/dist` on GitHub Pages, at
+  `https://<owner>.github.io/<repository>/`; the workflow turns Pages on if it is off
+- The deployed page is the same static site: it scans live GitHub from the visitor's browser, with
+  their own token if they paste one; nothing is kept on a server
 ## Behaviour
 - The same scan as the CLI (`createBrowserBackend().scan`), from the browser, over live GitHub;
   the same URLs, `/tree/<ref>` and `github.com/<owner>` included
@@ -142,5 +148,7 @@ site in `web/dist`.
 - `tests/sky.test.ts`: the chart of a scan and its terrain, in Node
 - `tests/web/*.spec.ts`, `npm run test:web`: the built page in Chromium, GitHub answered from
   recordings; what the sky shows is read from its canvas
+- `tests/pages.test.ts`: the Pages workflow deploys the build of `main`, and the built page
+  loads its scripts and styles by relative paths
 - `tests/screenshots.test.ts`: CI, the npm script and the installed Playwright name the same
   container; CI keeps the recordings; every screenshot has its baseline
