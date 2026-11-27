@@ -307,6 +307,29 @@ test('a scan started while another runs takes the view; the earlier one’s worl
   expect(new URL(page.url()).searchParams.getAll('repo')).toEqual(['https://github.com/JetBrains/koog', 'https://github.com/JetBrains/atlas-demo']);
 });
 
+test('going to a world while a scan runs is the latest move: the scan is charted where it stands, and does not take the view', async ({ page }) => {
+  const releaseDemo = slow('JetBrains/atlas-demo');
+  await page.goto(address(['JetBrains/atlas-twin'], '&view=system'));
+  await expect(worldButtons(page)).toHaveText([/^JetBrains\/atlas-twin/]);
+  await scan(page, 'https://github.com/JetBrains/atlas-demo');
+  await expect(world(page, DEMO)).toHaveAttribute('data-state', 'scanning');
+
+  await worldButtons(page).first().click();
+  await expect(system(page)).toHaveText('JetBrains/atlas-twin 3 skills');
+  const twin = ['https://github.com/JetBrains/atlas-twin', 'https://github.com/JetBrains/atlas-demo'];
+  expect(new URL(page.url()).searchParams.getAll('repo')).toEqual(twin);
+
+  // The scan answers: its world is charted, and the world gone to stays in view, in the field and in the address.
+  releaseDemo();
+  await expect(world(page, DEMO)).toHaveAttribute('data-state', 'charted');
+  await expect(page.getByRole('navigation', { name: 'Kin' }).getByRole('button')).toHaveText([/^JetBrains\/atlas-demo \d+%$/]);
+  await expect(system(page)).toHaveText('JetBrains/atlas-twin 3 skills');
+  await expect(sky(page)).toHaveAttribute('data-view', 'world');
+  await expect(page.getByLabel('Repository link')).toHaveValue('https://github.com/JetBrains/atlas-twin');
+  expect(new URL(page.url()).searchParams.getAll('repo')).toEqual(twin);
+  expect(new URL(page.url()).searchParams.get('view')).toBeNull();
+});
+
 test('while a scan runs, a meridian sweeps its world', async ({ page }) => {
   // GitHub takes its time over this repository, for as long as the test holds the answer.
   const release = slow('JetBrains/atlas-demo');

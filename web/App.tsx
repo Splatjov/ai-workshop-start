@@ -251,16 +251,20 @@ export function App({ backend }: { backend: Backend }) {
     setPointed(undefined);
     setPointedWorld(undefined);
     setFilter('');
+    // Going somewhere is the latest move: a scan still running is charted where it stands, and does not take the view.
     if (group) {
+      latest.current++;
       setAt(group.key);
       setFront(group.key);
       setInput(group.url);
     } else if (!world) {
+      latest.current++;
       setAt(undefined);
       if (asked.length > 0) setFront(undefined);
     } else if (world.state === 'scanning') {
       return;
     } else if (world.scan) {
+      latest.current++;
       setAt(world.key);
       setFront(world.key);
       setInput(world.url);

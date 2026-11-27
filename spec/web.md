@@ -50,7 +50,9 @@ site in `web/dist`.
   in a new tab or window, as any link. `chart all` scans every example not yet charted; the view
   stays over the system
 - A scan started while another runs takes the view: only the latest scan's result is shown. The
-  earlier one's world is charted where it stands
+  earlier one's world is charted where it stands. Going to a world, to an organization's skills or
+  back to the system while a scan runs is the latest move too: that scan is charted where it
+  stands, and the view, the field and the address stay where the user went
 - `?repo=<URL>` in the page's address scans at once. Several `repo`s chart them all, the first in
   view; with `view=system`, none is, and the page opens over the system. Scanning and going from
   world to world write the address so: a system can be shared or reloaded. *Nothing is stored*
