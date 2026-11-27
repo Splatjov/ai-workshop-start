@@ -99,8 +99,9 @@ site in `web/dist`.
 - No WebGL → the page works without the sky
 ## Recordings and screenshots
 - **The demo as a test**: `tests/web/walkthrough.spec.ts` walks the page as a user would (open,
-  scan a repository, choose a skill, filter, a filter without a match; an organization, its
-  filter, a link that cannot be scanned) and after each step checks what the user should see
+  over the system; scan a repository, at its world; choose a skill, filter, a filter without a
+  match; an organization, its worlds, its filter, a link that cannot be scanned) and after each
+  step checks what the user should see
 - **A video of every run**: every test of `npm run test:web` records one into `test-results/`;
   CI keeps them, with the HTML report, as the `web-recordings` artifact, passed or failed
 - **Screenshots at the key moments** (`start`, `repository`, `skill`, `filter`, `no-match`,
@@ -108,8 +109,10 @@ site in `web/dist`.
   `tests/web/__screenshots__/`. One pixel off fails the check; CI keeps its expected, actual and
   diff images, side by side in the HTML report
 - **The same pixels on every run**: the recorded GitHub answers, a 1280×800 viewport at scale 1,
-  reduced motion and no animations or caret, drawably's sketches from a fixed seed, and the fonts
-  of the Playwright container (`mcr.microsoft.com/playwright:v<@playwright/test>-noble`)
+  reduced motion and no animations or caret, the sky at rest (`data-rest` on its canvas),
+  drawably's sketches and the sky's pen from fixed seeds (one sequence per caller, so how many
+  sketches come before the sky does not change it), and the fonts of the Playwright container
+  (`mcr.microsoft.com/playwright:v<@playwright/test>-noble`)
 - The screenshots are compared only in that container: on CI, and with `npm run
   test:screenshots` (Docker, or Podman), which sets `SCREENSHOTS=1`. Elsewhere `npm run test:web`
   skips the comparisons and keeps the behaviour checks
