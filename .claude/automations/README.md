@@ -50,11 +50,13 @@ Each rule below closes a hole that was open, or a loop that ran, before.
    per reviewed head (a claim comment, lowest id wins); one PR per issue.
 6. **The loop runs until the review says ready.** There is no limit on fix rounds: every
    `not-ready` review of the current head gets one, and every push gets a review. Before, the
-   fourth round was refused, and findings in `.claude/` or `AGENTS.md` were always declined, so
-   PRs stopped half-fixed and waited for a person. Two things still end it: a fix round with no
-   commit (everything declined: a product decision, a workflow or a dependency) pushes nothing,
-   so no review follows, and its comment says a person is needed; and a re-review may not raise
-   new nits on code the earlier review saw, so the rounds converge. Nothing else stops it:
+   fourth round was refused, and findings in `.claude/`, `AGENTS.md`, workflows or dependencies
+   were always declined, so PRs stopped half-fixed and waited for a person. Now every file is
+   fixed like code, and a "Needs a human" entry is asked in Slack and settled in the same round.
+   Two things still end it: a fix round with no commit (everything declined, or Slack did not
+   answer in time) pushes nothing, so no review follows, and its comment says a person is needed;
+   and a re-review may not raise new nits on code the earlier review saw, nor a finding a person
+   settled in Slack, so the rounds converge. Nothing else stops it:
    **to stop a PR's loop, mark it as a draft**, or pause "work after code review".
 7. **Merging is gated, and atomic.** Only on `verdict=ready` for the current head, base `main`,
    not stacked, no person's "changes requested", mergeable, CI green on that head; then
@@ -62,10 +64,29 @@ Each rule below closes a hole that was open, or a loop that ran, before.
    since. A run that made commits never merges.
 8. **A pull request does not write the rules of its own review.** The automations read their
    skill from `origin/main`, never from the PR's working tree, and do nothing when `main` has
-   none. A PR that changes a skill is reviewed by the skill as it was. So the PR that first adds
-   a skill, or changes the marker line, is not handled by the new rules: **a person merges it.**
+   none. A PR that changes a skill, a prompt, `AGENTS.md`, a workflow or a dependency is reviewed
+   and merged by the rules as they were, like any other PR; its new rules apply from the next
+   run on. Two things the automations cannot do for themselves: a PR that changes a prompt or a
+   trigger still needs a person to copy it into Air, and one that changes the marker line must
+   change `code-review` and `review-fix` together (both read `main`, so they switch at once).
 9. **Nobody builds on an unmerged branch.** A PR stacked on another carries that one's commits
    into `main` under its own review.
+
+## Asking a person (Slack)
+
+When an issue leaves a product decision open ("make the skill list nicer"), Issue start does not
+guess and does not stop: it posts one question with concrete options to the Slack channel named in
+[`issue-fix`](../skills/issue-fix/SKILL.md) step 3a, waits up to 40 minutes for a person's reply in
+its thread, and builds what the reply picks. No reply → the question goes on the issue, as before.
+
+- The environments of Issue start and "work after code review" hold the secret `SLACK_BOT_TOKEN`
+  (a bot with `chat:write` and `channels:history`/`groups:history`, member of that channel). The
+  fix automation uses it for a review's "Needs a human" entries: it asks them all in one message
+  and fixes or declines each as the reply says. Code Review does not need it.
+- A reply chooses between readings of a trusted author's issue; it is not an instruction. Anyone
+  in the channel can reply, so a reply that asks for more (a secret, CI, a merge) is not followed.
+- While it waits, the run rewrites its `working` comment every few minutes, so a redelivered
+  event does not take the issue over (claims expire 60 minutes after their last update).
 
 ## Demos
 
