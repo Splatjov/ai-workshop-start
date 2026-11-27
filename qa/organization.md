@@ -11,7 +11,8 @@ Needs: the network and a GitHub token (the tester types it into the *GitHub toke
    **See:** within a minute: the heading `JetBrains`, linked, and `N skills in R repositories`,
    with N at least 300 and R at least 30 (397 in 35 on 2026-11-26); the skills grouped under
    their repositories' `JetBrains/<repo>` headings; the first skill of the first repository
-   chosen, its `SKILL.md` on the right. No error.
+   chosen, its `SKILL.md` on the right. The view stays over the system: each of those
+   repositories is a world on it, the world of the chosen skill marked. No error.
 4. **Do:** type `weather-retrieval` into the filter.
    **See:** `1 of N skills` (N as in step 3); only the `JetBrains/koog` heading, with
    `weather-retrieval` under it, chosen: *Retrieve current weather information for a specific

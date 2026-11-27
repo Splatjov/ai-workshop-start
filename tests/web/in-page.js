@@ -1,0 +1,149 @@
+// What the tests run inside the page. Plain JavaScript: these functions are sent to the browser, and
+// its types (the DOM) are not this project's.
+
+/**
+ * What is drawn on the sky, read in the frame it was drawn in: how many pixels are in the pen's
+ * colour, how many in the accent's (the red pencil by day, gold by night) and how many in the
+ * wash's (the marker's, over the lands); how light the pen is (0 to 255); and the sum of everything
+ * drawn, which is the same for the same drawing.
+ * @returns {Promise<{ inked: number, accented: number, washed: number, tone: number, weight: number }>}
+ */
+export function ink() {
+  return new Promise((resolve) =>
+    requestAnimationFrame(() => {
+      const drawn = document.querySelector('canvas.sky');
+      const copy = document.createElement('canvas');
+      copy.width = drawn.width;
+      copy.height = drawn.height;
+      const context = copy.getContext('2d', { willReadFrequently: true });
+
+      // The page's own colours, whatever their notation: a canvas reads them.
+      const style = getComputedStyle(document.documentElement);
+      const colours = ['--ink', '--accent', '--marker'].map((name) => {
+        context.clearRect(0, 0, 1, 1);
+        context.fillStyle = style.getPropertyValue(name).trim();
+        context.fillRect(0, 0, 1, 1);
+        return context.getImageData(0, 0, 1, 1).data;
+      });
+      context.clearRect(0, 0, 1, 1);
+
+      context.drawImage(drawn, 0, 0);
+      const { data } = context.getImageData(0, 0, copy.width, copy.height);
+      const counts = [0, 0, 0];
+      let light = 0;
+      let weight = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] <= 48) continue;
+        weight += data[i + 3];
+        let nearest = 0;
+        let least = Infinity;
+        for (let c = 0; c < 3; c++) {
+          const away = (data[i] - colours[c][0]) ** 2 + (data[i + 1] - colours[c][1]) ** 2 + (data[i + 2] - colours[c][2]) ** 2;
+          if (away < least) [least, nearest] = [away, c];
+        }
+        counts[nearest]++;
+        if (nearest === 0) light += (data[i] + data[i + 1] + data[i + 2]) / 3;
+      }
+      resolve({ inked: counts[0], accented: counts[1], washed: counts[2], tone: counts[0] ? light / counts[0] : 0, weight });
+    }),
+  );
+}
+
+/**
+ * The names of the places that are in plain view: on the near side of the world, inside the sky's
+ * place on the page, their names fully shown.
+ * @returns {string[]}
+ */
+export function placesInView() {
+  const slot = document.querySelector('.globe').getBoundingClientRect();
+  return [...document.querySelectorAll('[data-place]')]
+    .filter((place) => {
+      const at = place.getBoundingClientRect();
+      const inside = at.x > slot.left + 30 && at.x < slot.right - 30 && at.y > slot.top + 30 && at.y < slot.bottom - 30;
+      return inside && Number(getComputedStyle(place).opacity) > 0.9;
+    })
+    .map((place) => place.textContent);
+}
+
+/** A browser without WebGL: a canvas gives no such context. */
+export function withoutWebGL() {
+  const getContext = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function (kind, ...rest) {
+    return String(kind).startsWith('webgl') ? null : getContext.call(this, kind, ...rest);
+  };
+}
+
+/** Whether the page itself scrolls: it is taller than its window. */
+export function pageScrolls() {
+  return document.documentElement.scrollHeight > window.innerHeight;
+}
+
+/** How far down the page is scrolled, in pixels. */
+export function scrolled() {
+  return window.scrollY;
+}
+
+export function scrollToTop() {
+  window.scrollTo(0, 0);
+}
+
+/**
+ * Two fingers apart on a trackpad, over a point of the sky: the browser tells it as a wheel with
+ * Ctrl held.
+ * @param {Element} slot
+ * @param {{ x: number, y: number }} at
+ */
+export function twoFingersApart(slot, at) {
+  for (let i = 0; i < 4; i++) {
+    slot.dispatchEvent(new WheelEvent('wheel', { deltaY: -40, ctrlKey: true, clientX: at.x, clientY: at.y, bubbles: true, cancelable: true }));
+  }
+}
+
+/** Resolves once the page's type has loaded: until then the page is set in other type, and laid out otherwise. */
+export function typeLoaded() {
+  return document.fonts.ready.then(() => true);
+}
+
+/**
+ * What is written on the sky and can be read (the worlds' names, how alike two worlds are), and
+ * what meets what: a name and another name, or a name and what the page writes over the sky (the
+ * masthead's title, form and token, the register, the index, the sheet, the notes, the switch), or
+ * `chart all` and the margin's coordinates.
+ * @returns {{ names: string[], meeting: string[] }}
+ */
+export function namesOnTheSky() {
+  const box = (element) => element.getBoundingClientRect();
+  const meet = (a, b) => a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;
+  const written = [...document.querySelectorAll('.names [data-world], .names [data-kin]')]
+    .filter((element) => Number(getComputedStyle(element).opacity) > 0.05)
+    .map((element) => {
+      const text = element.querySelector('b') ?? element.querySelector('i');
+      const inside = box(document.documentElement);
+      const at = box(text);
+      const cut = at.left < 0 || at.top < 0 || at.right > inside.width || at.bottom > window.innerHeight;
+      return { name: text.textContent, at, cut, world: element.hasAttribute('data-world') };
+    });
+  const page = [...document.querySelectorAll('.masthead > :not(.eyebrow), .register, .ledger, .skill, .exposure, .note, .law-note, .hint, .legend')]
+    .map((element) => ({ name: `<${element.className || element.tagName.toLowerCase()}>`, at: box(element) }))
+    .filter(({ at }) => at.width > 0 && at.height > 0);
+  const meeting = written.filter(({ cut }) => cut).map(({ name }) => `${name} × the edge of the page`);
+  written.forEach((a, i) => {
+    for (const b of written.slice(i + 1)) if (meet(a.at, b.at)) meeting.push(`${a.name} × ${b.name}`);
+    for (const b of page) if (meet(a.at, b.at)) meeting.push(`${a.name} × ${b.name}`);
+  });
+  const all = document.querySelector('.examples .all');
+  const aim = document.querySelector('.margin .aim');
+  if (all && aim && meet(box(all), box(aim))) meeting.push('chart all × the coordinates');
+  return { names: written.filter(({ world }) => world).map(({ name }) => name), meeting };
+}
+
+/**
+ * The threads between worlds whose "how alike" cannot be read: the page lists a thread for each
+ * `[data-kin]`, and the sky writes its percent on it.
+ * @returns {string[]}
+ */
+export function threadsWithNoPercent() {
+  return [...document.querySelectorAll('.names [data-kin]')]
+    .filter((element) => !(Number(getComputedStyle(element).opacity) > 0.05))
+    .map((element) => element.getAttribute('data-kin'));
+}
