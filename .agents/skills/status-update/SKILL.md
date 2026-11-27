@@ -1,6 +1,6 @@
 ---
 name: status-update
-description: Writes the status post of this repository - the PRs merged, the issues resolved and the PRs in review or in progress since a time and date, by person, one mark per item - and posts it to the team's private Slack channel with SLACK_BOT_TOKEN. Nothing new, nothing posted. Built to run unattended in the "Status update" automation, or by hand.
+description: Writes the status post of this repository - the PRs merged, the issues resolved and the PRs in review or in progress since a time and date, by person, one mark per item - and posts it to Slack with SLACK_BOT_TOKEN: to #decision-making, or to the channel in SLACK_STATUS_CHANNEL. Nothing new, nothing posted. Built to run unattended in the "Status update" automation, or by hand.
 argument-hint: "[since=<time with zone>] [until=<time with zone>] [channel=<Slack channel id>]"
 ---
 
@@ -45,12 +45,13 @@ Rules that hold in every step:
 ## 1. The channel and the repository
 
 The channel is, first that is set: `channel=` in `$ARGUMENTS`; the environment variable
-`SLACK_STATUS_CHANNEL`. It is a channel **id** (`C…`), the team's private channel, with the bot
-a member. Neither set, or `$SLACK_BOT_TOKEN` unset → stop: nothing posted, the summary says what
-is missing.
+`SLACK_STATUS_CHANNEL`; else **`C0CMCSTCQ94`** (`#decision-making`, where the bot is a member).
+It is a channel **id** (`C…`), with the bot a member: a team that posts to a channel of its own
+sets its id in `SLACK_STATUS_CHANNEL`. `$SLACK_BOT_TOKEN` unset → stop: nothing posted, the
+summary says what is missing.
 
 ```bash
-CH="${CH:-$SLACK_STATUS_CHANNEL}"          # or the channel= argument
+CH="${CH:-${SLACK_STATUS_CHANNEL:-C0CMCSTCQ94}}"   # CH: the channel= argument, when given
 REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
 BOT=$(curl -sS https://slack.com/api/auth.test -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
   | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["user_id"] if d.get("ok") else "ERROR "+d.get("error","?"))')
