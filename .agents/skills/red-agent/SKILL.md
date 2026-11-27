@@ -21,6 +21,10 @@ Rules:
   place, text cut off or overlapping at 1280×800, something you cannot reach or use with the
   keyboard. No feature requests, no taste, no "it could be faster". Unsure → leave it out of the
   issues and put it under "Not filed" in the summary.
+- **The loading state is not a bug.** While a scan runs the button reads `Scanning…` and is
+  disabled, so Enter in the field and a click on it start nothing: the first scan's result under
+  a link typed meanwhile is the page working. The spec's "A scan started while another runs wins"
+  is about a scan that *does* start then: an example link, or `?repo=` in the address.
 - **Only what you reproduced.** A bug is filed only once it has happened twice, each time in a
   fresh page, from the steps written in the issue and nothing else. Once and never again (flaky,
   the network, GitHub) → "Not filed", with what you saw.
@@ -101,7 +105,7 @@ echo harness ready
 ## 2. Attack
 
 Write the attempts as `/tmp/red/<name>.red.ts`, one `test` each, short (under a minute), named
-by what they try (`enter-while-scanning`, `back-after-two-scans`). Call `watch(page)` first and
+by what they try (`example-while-scanning`, `back-after-two-scans`). Call `watch(page)` first and
 `seen(page, name, n)` after each step. Use what a user sees: `getByLabel('Repository link')`, `getByRole('button',
 { name: 'Scan' })`, `getByLabel('GitHub token')`, `getByLabel('Filter skills')`,
 `getByRole('navigation', { name: 'Examples' })`, `getByRole('alert')`. Type with
@@ -111,21 +115,28 @@ by what they try (`enter-while-scanning`, `back-after-two-scans`). Call `watch(p
 import { test } from '@playwright/test';
 import { seen, watch } from './red.ts';
 
-test('enter-while-scanning', async ({ page }) => {
-  const name = 'enter-while-scanning';
+test('example-while-scanning', async ({ page }) => {
+  const name = 'example-while-scanning';
   watch(page);
+  // the first scan's first answer comes 4 s late: it is still running when the second one starts
+  await page.route('https://api.github.com/repos/JetBrains/koog', async (route) => {
+    await new Promise((done) => setTimeout(done, 4000));
+    await route.continue().catch(() => {});
+  });
   await page.goto('./');
   if (process.env.QA_TOKEN) await page.getByLabel('GitHub token').fill(process.env.QA_TOKEN);
   const link = page.getByLabel('Repository link');
   await link.pressSequentially('https://github.com/JetBrains/koog/tree/709079e', { delay: 20 });
   await link.press('Enter');
-  await seen(page, name, 1);
-  await link.fill('https://github.com/anthropics/skills');
-  await link.press('Enter');   // the spec: a scan started while another runs wins, through every entry point
-  // wait for what *should* come, not for anything: the first scan's heading is already there
+  await seen(page, name, 1);   // the button reads Scanning…
+  // the spec: "A scan started while another runs wins: only the latest scan's result is shown"
+  await page.getByRole('navigation', { name: 'Examples' }).getByRole('link', { name: 'anthropics/skills' }).click();
+  // wait for what *should* come, not for anything; not there in time → the screenshot decides
   await page.getByRole('heading', { level: 2, name: 'anthropics/skills' }).or(page.getByRole('alert'))
-    .first().waitFor({ timeout: 60_000 }).catch(() => {});   // not there in time: the screenshot decides
+    .first().waitFor({ timeout: 30_000 }).catch(() => {});
   await seen(page, name, 2);
+  await page.waitForTimeout(6000);   // the first scan has ended by now: it must not replace the result
+  await seen(page, name, 3);
 });
 ```
 
@@ -134,9 +145,10 @@ given, name the areas):
 - **The link**: spaces around it, a trailing slash, `.git`, `http://`, no scheme, `www.`, upper
   case, a `/blob/…` or `/tree/<ref>/<path>` link, a query or `#` in it, a gist, an issue's link,
   a user without repositories, a very long text, an empty field, only spaces.
-- **Racing**: a second scan by Enter, by an example link and by `?repo=` while one runs; clicking
-  Scan twice; typing in the filter or choosing a skill while a scan runs; a new scan after a
-  filter.
+- **Racing**: a second scan by an example link and by `?repo=` while one runs, the first one
+  answering before and after the second; typing in the filter or choosing a skill while a scan
+  runs; a new scan after a filter. Enter and Scan while the button reads `Scanning…` do nothing
+  (the rules): the bug there would be a second scan that starts, or a button that stays disabled.
 - **History and the address**: `?repo=` with an odd value, encoded or not; Back and Forward after
   two scans (`page.goBack()`); a reload; a link shared with a filter typed.
 - **The filter**: upper case, accents, several words, spaces only, regex characters (`.*`, `(`,
