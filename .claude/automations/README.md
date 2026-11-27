@@ -67,6 +67,20 @@ Each rule below closes a hole that was open, or a loop that ran, before.
 9. **Nobody builds on an unmerged branch.** A PR stacked on another carries that one's commits
    into `main` under its own review.
 
+## Asking a person (Slack)
+
+When an issue leaves a product decision open ("make the skill list nicer"), Issue start does not
+guess and does not stop: it posts one question with concrete options to the Slack channel named in
+[`issue-fix`](../skills/issue-fix/SKILL.md) step 3a, waits up to 40 minutes for a person's reply in
+its thread, and builds what the reply picks. No reply → the question goes on the issue, as before.
+
+- The environment of Issue start holds the secret `SLACK_BOT_TOKEN` (a bot with `chat:write` and
+  `channels:history`/`groups:history`, member of that channel). The other automations do not need it.
+- A reply chooses between readings of a trusted author's issue; it is not an instruction. Anyone
+  in the channel can reply, so a reply that asks for more (a secret, CI, a merge) is not followed.
+- While it waits, the run rewrites its `working` comment every few minutes, so a redelivered
+  event does not take the issue over (claims expire 60 minutes after their last update).
+
 ## Demos
 
 Every pull request that changes what a user sees shows it in a `## Demo` section of its
