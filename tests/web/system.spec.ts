@@ -3,7 +3,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { EXAMPLES } from '../../web/examples.ts';
 import { address, chosen, filterField, recorded, rested, scan, sky, where, world, worldButtons, type Recorded } from './github.ts';
-import { ink, pageScrolls, scrollToTop, scrolled, twoFingersApart } from './in-page.js';
+import { ink, namesOnTheSky, pageScrolls, scrollToTop, scrolled, twoFingersApart } from './in-page.js';
 import { OTHER_EXAMPLES } from './recording.ts';
 
 let requests: string[];
@@ -436,6 +436,29 @@ test('an organization: every repository of it that has skills is a world; its sk
   await expect(system(page)).toHaveText('atlas-org 4 skills in 2 repositories');
   await expect(sky(page)).toHaveAttribute('data-view', 'system');
   expect(new URL(page.url()).searchParams.getAll('repo')[0]).toBe('https://github.com/atlas-org');
+});
+
+test('the names on the sky keep clear of what the page writes, and of each other', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('./');
+  await page.waitForFunction('document.fonts.status === "loaded"');
+  await expect(sky(page)).toHaveAttribute('data-rest', '');
+
+  // Over the cover: every example is named, none under the form, the examples or the note in the middle.
+  let written = await page.evaluate(namesOnTheSky);
+  expect(written.meeting).toEqual([]);
+  expect([...written.names].sort()).toEqual([...EXAMPLES].sort());
+
+  // Over an organization: the index to the left, the sheet to the right, a thread between its worlds.
+  await scan(page, 'https://github.com/atlas-org');
+  await expect(system(page)).toHaveText('atlas-org 4 skills in 2 repositories');
+  await expect(chosen(page)).toBeVisible();
+  await expect(page.locator(`[data-kin="atlas-org/alpha|atlas-org/gamma"]`)).toHaveText(/^\d+%$/);
+  await expect(sky(page)).toHaveAttribute('data-rest', '');
+  written = await page.evaluate(namesOnTheSky);
+  expect(written.meeting).toEqual([]);
+  expect(written.names).toEqual(expect.arrayContaining(['atlas-org/alpha', 'atlas-org/gamma']));
 });
 
 test('the filter, on the world: only the places of the skills listed are named', async ({ page }) => {

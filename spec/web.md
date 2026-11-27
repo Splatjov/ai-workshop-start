@@ -47,8 +47,8 @@ site in `web/dist`.
   `vercel-labs/agent-skills`, `openai/codex`, `huggingface/skills`, `trailofbits/skills`,
   `getsentry/skills`, `JetBrains/kotlin`, `JetBrains/koog`, each a link to `?repo=<its URL>`;
   clicking one puts its URL in the field and scans it; Ctrl/Cmd-, Shift- and middle-click open it
-  in a new tab or window, as any link. `chart all` scans every example not yet charted; the view
-  stays over the system
+  in a new tab or window, as any link. `chart all`, beside their caption, scans every example not
+  yet charted; the view stays over the system
 - A scan started while another runs takes the view: only the latest scan's result is shown. The
   earlier one's world is charted where it stands. Going to a world, to an organization's skills or
   back to the system while a scan runs is the latest move too: that scan is charted where it
@@ -75,6 +75,11 @@ site in `web/dist`.
   `N skills in R repositories`: a click, and its skills are read again
 - A thread from each world to the one most like it, with how alike they are, in percent, half way
   along; the world pointed at is ringed in red, and has a thread to every other
+- A world's name is written under it; or over it, or beside it, where there is no room. It keeps
+  clear of the other names and worlds, and of what the page writes over the sky: the title, the
+  form, the register, the index, the sheet, the notes. A name with no room anywhere is left out,
+  until its world is pointed at. How alike two worlds are keeps clear of the names: where one is
+  written half way along the thread, it is written elsewhere along it, or beside it
 - Clicking a world goes to it; one not yet charted is scanned first
 - The wheel, or two fingers on a trackpad, goes nearer to the world under the pointer, and back to
   the system; where the page itself scrolls, the wheel is the page's. `Escape` and `the system`,

@@ -414,7 +414,7 @@ export function App({ backend }: { backend: Backend }) {
         </span>
       </div>
 
-      <label className="exposure">
+      <label className="exposure" data-clear>
         <Sun size={18} color={INK} />
         <DrawablyToggle
           aria-label="Night sky"
@@ -429,16 +429,16 @@ export function App({ backend }: { backend: Backend }) {
           <p className="eyebrow">
             <Telescope size={16} color={INK} /> An atlas of agent skills, one world a repository
           </p>
-          <h1>
+          <h1 data-clear>
             <span className="word">Skill</span>{' '}
             <span className="word">
               <DrawablyHighlight fill="var(--marker)">Atlas</DrawablyHighlight>
             </span>
             <Sparkles className="spark" size={44} color="var(--accent)" />
           </h1>
-          <p className="tagline">Every SKILL.md in a GitHub repository, or in all of an organization's.</p>
+          <p className="tagline" data-clear>Every SKILL.md in a GitHub repository, or in all of an organization's.</p>
 
-          <form className="scan" onSubmit={submit} role="search">
+          <form className="scan" onSubmit={submit} role="search" data-clear>
             <label htmlFor="repo" className="visually-hidden">
               Repository link
             </label>
@@ -459,7 +459,7 @@ export function App({ backend }: { backend: Backend }) {
             </DrawablyButton>
           </form>
 
-          <div className="token">
+          <div className="token" data-clear>
             <label htmlFor="token">
               <KeyRound size={16} color={INK} /> GitHub token
             </label>
@@ -484,14 +484,14 @@ export function App({ backend }: { backend: Backend }) {
           </div>
 
           {failure && (
-            <DrawablyAlert role="alert" className="error" stroke="var(--accent)">
+            <DrawablyAlert role="alert" className="error" stroke="var(--accent)" data-clear>
               <span data-tag>error</span> {failure}
             </DrawablyAlert>
           )}
         </header>
 
         {!here && !over && (
-          <aside className="register">
+          <aside className="register" data-clear>
             {charted.length > 0 && (
               <section aria-label="The system">
                 <h2 className="system">
@@ -545,6 +545,11 @@ export function App({ backend }: { backend: Backend }) {
 
             <nav className="examples" aria-label="Examples">
               <span>{charted.length > 0 ? 'chart another' : 'or chart one of these'}</span>
+              {uncharted > 1 && (
+                <button type="button" className="all" disabled={scanning} onClick={chartAll}>
+                  chart all {uncharted === EXAMPLES.length ? 'nine' : uncharted}
+                </button>
+              )}
               <ul>
                 {EXAMPLES.map((id) => {
                   const url = `https://github.com/${id}`;
@@ -564,11 +569,6 @@ export function App({ backend }: { backend: Backend }) {
                   );
                 })}
               </ul>
-              {uncharted > 1 && (
-                <button type="button" className="all" disabled={scanning} onClick={chartAll}>
-                  chart all {uncharted === EXAMPLES.length ? 'nine' : uncharted}
-                </button>
-              )}
             </nav>
           </aside>
         )}
@@ -577,13 +577,13 @@ export function App({ backend }: { backend: Backend }) {
           <StillGlobe />
           {view === 'cover' && (
             <>
-              <p className="note" ref={note}>
+              <p className="note" ref={note} data-clear>
                 every world
                 <br />
                 is a repository
               </p>
               <span className="note-target" ref={noteTarget} />
-              <p className="law-note">
+              <p className="law-note" data-clear>
                 the closer two worlds stand,
                 <br />
                 the more alike their skills
@@ -592,7 +592,7 @@ export function App({ backend }: { backend: Backend }) {
             </>
           )}
           {here && skills.length > 0 ? (
-            <p className="legend">
+            <p className="legend" data-clear>
               <i className="mark place" /> a skill <i className="mark copy" /> its copy
               <span>the higher it stands, the longer its SKILL.md</span>
               <span className="turn">
@@ -600,7 +600,7 @@ export function App({ backend }: { backend: Backend }) {
               </span>
             </p>
           ) : (
-            <p className="hint">
+            <p className="hint" data-clear>
               <Rotate3d size={18} color="var(--pencil)" />{' '}
               {here ? 'drag to turn it' : view === 'cover' ? 'drag to turn the plate' : 'drag to turn the plate, scroll to go nearer'}
             </p>
@@ -688,7 +688,7 @@ function Result({
   let entry = 0;
   return (
     <section aria-label="Scan result" className="result">
-      <div className="ledger">
+      <div className="ledger" data-clear>
         <button type="button" className="back" onClick={() => onVisit(undefined)}>
           <Orbit size={15} color="var(--pencil)" /> the system · {worlds} {worlds === 1 ? 'world' : 'worlds'}
         </button>
@@ -820,7 +820,7 @@ function Result({
       </div>
 
       {selected && (
-        <DrawablyCard key={selected.id} className="skill" aria-label={`${selected.name}: SKILL.md`} role="region">
+        <DrawablyCard key={selected.id} className="skill" aria-label={`${selected.name}: SKILL.md`} role="region" data-clear>
           <p className="size">{size(selected.markdown)}</p>
           <h3 style={{ '--fit': Math.min(1, 15 / selected.name.length) } as CSSProperties}>
             <FileText size={26} color={INK} /> {selected.name}

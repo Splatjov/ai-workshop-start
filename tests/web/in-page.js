@@ -103,3 +103,36 @@ export function twoFingersApart(slot, at) {
 export function typeLoaded() {
   return document.fonts.ready.then(() => true);
 }
+
+/**
+ * What is written on the sky and can be read (the worlds' names, how alike two worlds are), and
+ * what meets what: a name and another name, or a name and what the page writes over the sky (the
+ * masthead's title, form and token, the register, the index, the sheet, the notes, the switch), or
+ * `chart all` and the margin's coordinates.
+ * @returns {{ names: string[], meeting: string[] }}
+ */
+export function namesOnTheSky() {
+  const box = (element) => element.getBoundingClientRect();
+  const meet = (a, b) => a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;
+  const written = [...document.querySelectorAll('.names [data-world], .names [data-kin]')]
+    .filter((element) => Number(getComputedStyle(element).opacity) > 0.05)
+    .map((element) => {
+      const text = element.querySelector('b') ?? element.querySelector('i');
+      const inside = box(document.documentElement);
+      const at = box(text);
+      const cut = at.left < 0 || at.top < 0 || at.right > inside.width || at.bottom > window.innerHeight;
+      return { name: text.textContent, at, cut, world: element.hasAttribute('data-world') };
+    });
+  const page = [...document.querySelectorAll('.masthead > :not(.eyebrow), .register, .ledger, .skill, .exposure, .note, .law-note, .hint, .legend')]
+    .map((element) => ({ name: `<${element.className || element.tagName.toLowerCase()}>`, at: box(element) }))
+    .filter(({ at }) => at.width > 0 && at.height > 0);
+  const meeting = written.filter(({ cut }) => cut).map(({ name }) => `${name} × the edge of the page`);
+  written.forEach((a, i) => {
+    for (const b of written.slice(i + 1)) if (meet(a.at, b.at)) meeting.push(`${a.name} × ${b.name}`);
+    for (const b of page) if (meet(a.at, b.at)) meeting.push(`${a.name} × ${b.name}`);
+  });
+  const all = document.querySelector('.examples .all');
+  const aim = document.querySelector('.margin .aim');
+  if (all && aim && meet(box(all), box(aim))) meeting.push('chart all × the coordinates');
+  return { names: written.filter(({ world }) => world).map(({ name }) => name), meeting };
+}

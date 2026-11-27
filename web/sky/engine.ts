@@ -121,7 +121,7 @@ export type Sky = {
 };
 
 /** A name on the page: its element is a point, at what it names; the text inside hangs to one side of it. */
-type Name = { element: HTMLElement; text: HTMLElement; width: number; height: number; shown: string; moved: string; side: string; gap: number };
+type Name = { element: HTMLElement; text: HTMLElement; width: number; height: number; shown: string; moved: string; side: string; gap: number; room?: string };
 type PlaceName = Name & { at: Vector3; place: number };
 type Tween = { time: number; duration: number; delay: number; apply(t: number): void };
 
@@ -1501,7 +1501,7 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
     material.uniforms.uAlpha.value = alpha;
   }
 
-  /** A thread between two worlds, from the edge of one to the edge of the other, and what it measures. */
+  /** A thread between two worlds, from the edge of one to the edge of the other. */
   function thread(line: Line, apart: number) {
     const [a, b] = [worlds.get(line.a), worlds.get(line.b)];
     const here = a && b && !a.gone && !b.gone ? Math.min(a.alpha, b.alpha) * apart : 0;
@@ -1518,27 +1518,22 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
       line.mesh.scale.setScalar(long);
       line.pen.uniforms.uAlpha.value = (line.pen.userData.alpha as number) * here;
     }
-    const label = line.name;
-    if (!label) return;
-    let opacity = 0;
-    let moved = label.moved;
-    if (a && b && here > 0.01) {
-      const middle = see(w.copy(a.group.position).add(b.group.position).multiplyScalar(0.5));
-      moved = `translate3d(${middle.x.toFixed(1)}px,${middle.y.toFixed(1)}px,0)`;
-      opacity = here;
-    }
-    const text = opacity <= 0.02 ? '0' : opacity.toFixed(2);
-    if (text !== label.shown) label.element.style.opacity = label.shown = text;
-    if (moved !== label.moved) label.element.style.transform = label.moved = moved;
   }
 
   /**
-   * Writes each world's name under it; or over it, or beside it, where that is taken by another
-   * name or another world. A name with no room anywhere is left out, unless its world is pointed at.
+   * Writes each world's name under it; or over it, or beside it, where that is taken: by another
+   * name, another world, or what the page writes over the sky (its `[data-clear]`: the form, the
+   * register, the sheet). Under or over it, a name moves along to stay on the page, or to find
+   * room. The world pointed at is named first; a name with no room anywhere is left out, unless its
+   * world is pointed at. Then how alike two worlds are, along their thread, clear of all of these.
    */
   function nameWorlds(apart: number) {
     const taken: [number, number, number, number][] = [];
-    const clear = (world: World, left: number, top: number, wide: number, high: number) => {
+    for (const element of document.querySelectorAll<HTMLElement>('[data-clear]')) {
+      const rect = element.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) taken.push([rect.left, rect.top, rect.right, rect.bottom]);
+    }
+    const clear = (world: World | undefined, left: number, top: number, wide: number, high: number) => {
       if (left < 4 || top < 4 || left + wide > width - 4 || top + high > height - 4) return false;
       if (taken.some(([l, t, r, b]) => left < r && left + wide > l && top < b && top + high > t)) return false;
       // Not over another world either: the nearest point of the name to its middle is outside it.
@@ -1548,22 +1543,28 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
         return Math.hypot(other.x - x, other.y - y) < other.size + 3;
       });
     };
-    for (let i = order.length - 1; i >= 0; i--) {
-      const world = order[i];
+    const first = pointedWorld && order.includes(pointedWorld) ? [pointedWorld] : [];
+    for (const world of [...first, ...[...order].reverse().filter((world) => world !== pointedWorld)]) {
       const label = worldNames.get(world.key);
       if (!label) continue;
       let opacity = world.gone ? 0 : world.alpha * apart;
       const reach = world.size * (world.rings.length > 0 ? 1.5 : 1);
       const under = Math.round(reach + 9);
       const beside = Math.round(world.size * (world.rings.length > 0 ? 1.85 : 1) + 10);
+      const middle = world.x - label.width / 2;
+      // Along, to stay on the page, or as far to a side as the name still reaches its world.
+      const within = clamp(clamp(middle, 6, width - 6 - label.width), world.x - label.width + 8, world.x - 8);
       const sides: [string, number, number, number][] = [
-        ['under', world.x - label.width / 2, world.y + under, under],
-        ['over', world.x - label.width / 2, world.y - under - label.height, under],
+        ...[middle, within, world.x - label.width + 8, world.x - 8].flatMap((left): [string, number, number, number][] => [
+          ['under', left, world.y + under, under],
+          ['over', left, world.y - under - label.height, under],
+        ]),
         ['right', world.x + beside, world.y - label.height / 2, beside],
         ['left', world.x - beside - label.width, world.y - label.height / 2, beside],
       ];
       const free = sides.find(([, left, top]) => clear(world, left, top, label.width, label.height));
       const [side, left, top, gap] = free ?? sides[0];
+      const shift = side === 'under' || side === 'over' ? Math.round(left - middle) : 0;
       if (!free && world !== pointedWorld) opacity = 0;
       if (opacity > 0.02) taken.push([left - 6, top - 3, left + label.width + 6, top + label.height + 3]);
       const text = opacity <= 0.02 ? '0' : opacity.toFixed(2);
@@ -1571,13 +1572,38 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
       if (text !== label.shown) label.element.style.opacity = label.shown = text;
       if (moved !== label.moved) label.element.style.transform = label.moved = moved;
       if (side !== label.side) label.element.dataset.side = label.side = side;
-      // How far the name hangs from the middle of its world, and how large the world is drawn.
-      const room = gap * 10000 + Math.round(world.size);
-      if (room !== label.gap) {
-        label.gap = room;
+      // How far the name hangs from the middle of its world, how far along, and how large the world is drawn.
+      const room = `${gap} ${shift} ${Math.round(world.size)}`;
+      if (room !== label.room) {
+        label.room = room;
         label.element.style.setProperty('--gap', `${gap}px`);
+        label.element.style.setProperty('--shift', `${shift}px`);
         label.element.style.setProperty('--size', `${Math.round(world.size)}px`);
       }
+    }
+    // How alike two worlds are, in the middle of their thread; or along it, where a name is written there.
+    for (const line of lines) {
+      const label = line.name;
+      if (!label) continue;
+      const [a, b] = [worlds.get(line.a), worlds.get(line.b)];
+      let opacity = 0;
+      let moved = label.moved;
+      if (a && b && line.shown > 0.01) {
+        // Half way along; or elsewhere along it; or half way, just over the thread or under it.
+        const aside = label.height / 2 + 14;
+        const spot = [[0.5, 0], [0.38, 0], [0.62, 0], [0.26, 0], [0.74, 0], [0.5, -aside], [0.5, aside]]
+          .map(([along, by]) => [lerp(a.x, b.x, along), lerp(a.y, b.y, along) + by])
+          .find(([x, y]) => clear(undefined, x - label.width / 2, y - label.height / 2, label.width, label.height));
+        const [x, y] = spot ?? [lerp(a.x, b.x, 0.5), lerp(a.y, b.y, 0.5)];
+        moved = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0)`;
+        if (spot) {
+          opacity = line.shown;
+          taken.push([x - label.width / 2 - 2, y - label.height / 2 - 2, x + label.width / 2 + 2, y + label.height / 2 + 2]);
+        }
+      }
+      const text = opacity <= 0.02 ? '0' : opacity.toFixed(2);
+      if (text !== label.shown) label.element.style.opacity = label.shown = text;
+      if (moved !== label.moved) label.element.style.transform = label.moved = moved;
     }
   }
 
