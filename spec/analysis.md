@@ -64,3 +64,4 @@ Real repositories, each pinned to a commit: `npm run test:e2e`, in CI too
 - `JetBrains/koog` at `709079e`: 4 skills, two deep in test resources
 - `JetBrains/android` at `294d4c0`: a tree too large for one answer → `0 skills` and a warning,
   under 10 s
+- `JetBrains/koog` at `709079e`, scanned twice: the same output, the second from the CLI's cache
