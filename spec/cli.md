@@ -1,7 +1,7 @@
 # Command line
 `./skill-atlas scan <GitHub URL | directory> [--filter <words>]`; a `/tree/<ref>` URL pins a
 commit; `github.com/<owner>` scans all of an organization's repositories
-Prints the result **at once**; *nothing is stored*.
+Prints the result **at once**; *nothing is stored* but a GitHub repository's scan, in the cache (below).
 ## GitHub token
 `GITHUB_TOKEN`, in the environment, optional: `GITHUB_TOKEN=<token> ./skill-atlas scan …`. A higher
 GitHub rate limit (5000 requests an hour, not 60) and code search; in practice needed for an
@@ -29,3 +29,24 @@ JetBrains/kotlin · 6 skills
 ```
 - Repositories by id, a blank line before each; each as a repository scan prints it
 - With `--filter`: `M of N skills in R repositories`, only the repositories with a match
+## Cache
+What a GitHub repository's scan read, kept on disk by its commit: a commit never changes, so what
+was read at it is never stale. *The CLI only*; the web view stores nothing
+- In `$XDG_CACHE_HOME/skill-atlas`, else `~/.cache/skill-atlas` (a relative `XDG_CACHE_HOME` is
+  ignored): one file a commit, `<owner>/<repo>/<commit>.json` in lower case, under the
+  repository's own name, whatever case or old name the URL used. A local directory: nothing kept
+- Kept: every `SKILL.md` the scan read, as text (or that it was gone), and the listing's warnings;
+  the skills are parsed from them again at every scan
+- **A rescan**: one request, the commit (`commits/HEAD`, or the `/tree/<ref>`'s). A kept commit →
+  the same output, the same warnings, *no other request*. A new commit → scanned as without a
+  cache, and kept too
+- Kept from the whole tree, it serves every scan of that commit, `/tree/<commit>` and with a
+  token too; listed otherwise (code search with `GITHUB_TOKEN`, a tree too large for one answer),
+  only a scan listed the same way. What code search found is kept like the rest, though its index
+  can lag behind a push
+- **Organization**: each repository at its listed commit. With a token, a kept one costs no tree
+  and no file; without, its tree is still asked for (it says the commit), its files are not
+- A cache file that cannot be read, cut or not one of these → a miss: the scan goes on and keeps
+  it again. A cache that cannot be written → nothing kept, the same scan
+- An unreachable repository, an unknown ref → the same message as without a cache
+- No option: to start over, delete the directory

@@ -2,12 +2,23 @@
 // never changes. Needs the network; GITHUB_TOKEN, if set, raises the rate limit. `npm run test:e2e`.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { test } from 'node:test';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { after, test } from 'node:test';
 import { CLI } from '../helpers.ts';
+
+// A cache of this run's own: a scan kept by an earlier run would not ask GitHub at all.
+const CACHE = mkdtempSync(join(tmpdir(), 'skill-atlas-e2e-'));
+after(() => rmSync(CACHE, { recursive: true, force: true }));
 
 function scan(url: string) {
   const started = performance.now();
-  const result = spawnSync(process.execPath, [CLI, 'scan', url], { encoding: 'utf8', timeout: 60_000 });
+  const result = spawnSync(process.execPath, [CLI, 'scan', url], {
+    encoding: 'utf8',
+    timeout: 60_000,
+    env: { ...process.env, XDG_CACHE_HOME: CACHE },
+  });
   return { ...result, seconds: (performance.now() - started) / 1000 };
 }
 
@@ -45,3 +56,13 @@ test('JetBrains/android at 294d4c0: a tree too large for one answer, under 10 s'
   );
   assert.ok(result.seconds < 10, `took ${result.seconds.toFixed(1)} s`);
 });
+
+test('JetBrains/koog at 709079e, scanned again: the same output, from the cache', () => {
+  const url = 'https://github.com/JetBrains/koog/tree/709079e';
+  const first = scan(url);
+  assert.equal(first.status, 0, first.stderr);
+  assert.ok(existsSync(join(CACHE, 'skill-atlas', 'jetbrains', 'koog', '709079e4a34d6c9234583352550e6a2b88a0bb85.json')));
+  const again = scan(url);
+  assert.deepEqual([again.status, again.stdout, again.stderr], [first.status, first.stdout, first.stderr]);
+});
+
