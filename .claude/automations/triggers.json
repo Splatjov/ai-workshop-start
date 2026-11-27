@@ -27,8 +27,9 @@
     "automationId": "66f061ce-0213-4e46-97fe-764d0e6e7003",
     "promptFile": "issue-fix.prompt.md",
     "triggers": [
-      {"triggerType": "EVENT", "source": "github", "eventType": "issues.opened", "filters": {"issue_author": "Splatjov"}}
+      {"triggerType": "EVENT", "source": "github", "eventType": "issues.opened", "filters": {"issue_author": "Splatjov"}},
+      {"triggerType": "EVENT", "source": "github", "eventType": "issues.opened", "filters": {"issue_author": "jetbrains-air[bot]"}}
     ],
-    "triggerVcs": [{"sourceBranch": "main", "outputBehaviour": "create-pr"}]
+    "triggerVcs": [{"sourceBranch": "main", "outputBehaviour": "create-pr"}, {"sourceBranch": "main", "outputBehaviour": "create-pr"}]
   }
 }
