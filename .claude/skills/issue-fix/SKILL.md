@@ -96,7 +96,7 @@ its comments, and the code the issue is about.
 
 ## 3a. Ask a person in Slack
 
-The channel is **`C0CM8DBLYQ3`** (`#ai-workshop-start`, where the bot is a member). One question
+The channel is **`C0CMCSTCQ94`** (`#decision-making`, where the bot is a member). One question
 per run, posted once, answered in its thread.
 
 1. **The question** goes to `/tmp/slack-question.md`, in Slack's `mrkdwn`: the issue as a link
@@ -105,7 +105,7 @@ per run, posted once, answered in its thread.
    `Reply in this thread.` No secrets, no code dumps.
 2. **Post it**, and keep the thread's `ts`:
    ```bash
-   CH=C0CM8DBLYQ3
+   CH=C0CMCSTCQ94
    python3 -c 'import json,sys; print(json.dumps({"channel":sys.argv[1],"text":open(sys.argv[2]).read(),"unfurl_links":False}))' \
      "$CH" /tmp/slack-question.md > /tmp/slack-post.json
    curl -sS -X POST https://slack.com/api/chat.postMessage -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
@@ -118,7 +118,7 @@ per run, posted once, answered in its thread.
    command, so no tool call times out), and after each round rewrite the comment's `checked`
    time, which keeps the claim fresh (step 2):
    ```bash
-   CH=C0CM8DBLYQ3; TS=<ts>; : > /tmp/slack-answer.txt
+   CH=C0CMCSTCQ94; TS=<ts>; : > /tmp/slack-answer.txt
    for i in $(seq 16); do
      curl -sS -G https://slack.com/api/conversations.replies -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
        --data-urlencode "channel=$CH" --data-urlencode "ts=$TS" \
