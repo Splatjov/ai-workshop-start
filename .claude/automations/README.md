@@ -18,7 +18,7 @@ issue opened ──▶ Issue start ──▶ pull request
 
 | Automation | Starts on | May write | Prompt | Process |
 |---|---|---|---|---|
-| **Issue start** | `issues.opened` by `Splatjov`, or by `jetbrains-air[bot]` with the label `Delegated to AI` (the skill checks the label) | a new branch and one PR (`create-pr`) | [issue-fix.prompt.md](issue-fix.prompt.md) | [`issue-fix`](../skills/issue-fix/SKILL.md) |
+| **Issue start** | `issues.opened` by `Splatjov`, or by `jetbrains-air[bot]` with the label `Delegated to AI` and the red agent's marker (the skill checks both, and then changes only `web/`, `src/`, `tests/` and `spec/`) | a new branch and one PR (`create-pr`) | [issue-fix.prompt.md](issue-fix.prompt.md) | [`issue-fix`](../skills/issue-fix/SKILL.md) |
 | **Code Review** | `pull_request.opened`, `.synchronize`, `.ready_for_review`; author `Splatjov` or `jetbrains-air[bot]`; not a draft | nothing in git (`read-only`); one PR review | [code-review.prompt.md](code-review.prompt.md) | [`code-review`](../skills/code-review/SKILL.md) |
 | **work after code review** | `pull_request_review.submitted`, state `commented`, reviewer `jetbrains-air[bot]`; not a draft | commits on the PR branch (`push-to-source`); the merge | [review-fix.prompt.md](review-fix.prompt.md) | [`review-fix`](../skills/review-fix/SKILL.md) |
 
@@ -132,13 +132,25 @@ Red agent ──▶ issue by jetbrains-air[bot], "Delegated to AI" ──▶ Iss
 
 - Instructions: [red-agent.prompt.md](red-agent.prompt.md), on `main`, output `read-only`, no
   event trigger (**Run Now**, or a schedule). Like Manual QA, it writes to GitHub with the token
-  (the evidence branch, the issues, the label), which `read-only` does not restrict.
-- **Why the bot's issues are trusted only with the label.** Issue start's second trigger takes
-  every issue opened by `jetbrains-air[bot]`: only this repository's automations open issues as
-  the bot, and a stranger can neither open one as the bot nor label one (labels need triage
-  access). `issue-fix` step 1 then requires `Delegated to AI`, so Manual QA's unlabelled issues
-  still wait for a person. The label is read when the issue is opened: adding it later starts
-  nothing (there is no `issues.labeled` trigger).
+  (the evidence branch, the issues, the label), which `read-only` does not restrict, so the prompt
+  states those limits.
+- **Why the bot's issues are trusted, and how far.** Issue start's second trigger takes every
+  issue opened by `jetbrains-air[bot]`: only this repository's automations open issues as the
+  bot, and a stranger can neither open one as the bot nor label one (labels need triage access).
+  `issue-fix` step 1 then requires the label `Delegated to AI` and the red agent's marker
+  (`<!-- red-agent sha=… -->`) on the body's first line, so Manual QA's issues, which have
+  neither, still wait for a person. The label is read when the issue is opened: adding it later
+  starts nothing (there is no `issues.labeled` trigger).
+- **A bot issue changes the product only.** The trigger can filter on the author, not on the
+  label or the marker: those two are checked by a skill, and every Air session of this repository
+  posts as the bot and could write both. The red agent also reads other people's text (the
+  `SKILL.md` files of the repositories it scans), and nobody reads its issue before it is
+  implemented. So what such an issue can reach is bounded instead: `issue-fix` changes only
+  `web/`, `src/`, `tests/` and `spec/` for it (with the `README.md` example and the `memory/`
+  note it always writes), and answers, without a PR, one that asks for `.github/`, `.claude/`,
+  `.agents/`, `AGENTS.md`, `qa/`, dependencies or a config file. The worst a planted line can
+  get is a product change that Code Review holds against `spec/`; a change to CI, the skills or
+  the dependencies still starts from an issue a person (`Splatjov`) wrote.
 - To stop it: pause Red agent. To stop only its fixes: remove the bot's trigger of Issue start.
 
 **Not in `triggers.json` yet**: add it there with its id once it is created in Air.
