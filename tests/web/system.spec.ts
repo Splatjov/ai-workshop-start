@@ -3,7 +3,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { EXAMPLES } from '../../web/examples.ts';
 import { address, chosen, filterField, recorded, rested, scan, sky, where, world, worldButtons, type Recorded } from './github.ts';
-import { ink, namesOnTheSky, pageScrolls, scrollToTop, scrolled, twoFingersApart } from './in-page.js';
+import { ink, namesOnTheSky, pageScrolls, scrollToTop, scrolled, threadsWithNoPercent, twoFingersApart } from './in-page.js';
 import { OTHER_EXAMPLES } from './recording.ts';
 
 let requests: string[];
@@ -76,6 +76,7 @@ test('every repository scanned is a world; the more alike their skills, the clos
   await expect(page.locator('[data-kin]')).toHaveCount(2);
   const thread = await where(page, page.locator(`[data-kin="${DEMO}|${TWIN}"]`));
   expect(between(thread, { x: (demo.x + twin.x) / 2, y: (demo.y + twin.y) / 2 })).toBeLessThan(12); // written half way between them
+  await expect.poll(() => page.evaluate(threadsWithNoPercent)).toEqual([]); // and it can be read, though the two all but touch
   await expect.poll(async () => (await page.evaluate(ink)).washed).toBeGreaterThan(60); // their lands, washed
 
   // The same repositories, the same system: opened again, the worlds stand where they stood.
@@ -459,6 +460,31 @@ test('the names on the sky keep clear of what the page writes, and of each other
   written = await page.evaluate(namesOnTheSky);
   expect(written.meeting).toEqual([]);
   expect(written.names).toEqual(expect.arrayContaining(['atlas-org/alpha', 'atlas-org/gamma']));
+
+  // All nine charted: every thread drawn has how alike its two worlds are; at rest, and with a
+  // thread from the world pointed at to every other.
+  await page.goto('./');
+  await page.waitForFunction('document.fonts.status === "loaded"');
+  await page.getByRole('button', { name: 'chart all nine' }).click();
+  await expect(system(page)).toHaveText('The system 9 worlds');
+  await expect(worldButtons(page)).toHaveCount(9);
+  const unwritten = () => page.evaluate(threadsWithNoPercent);
+  await page.mouse.move(640, 790);
+  await expect(page.locator('.names [data-kin]')).not.toHaveCount(0);
+  await expect(sky(page)).toHaveAttribute('data-rest', '');
+  await expect.poll(unwritten, { message: 'threads with no percent, at rest' }).toEqual([]);
+  expect((await page.evaluate(namesOnTheSky)).meeting).toEqual([]);
+  const pointedAt: string[] = [];
+  for (let i = 0; i < EXAMPLES.length; i++) {
+    await worldButtons(page).nth(i).hover();
+    await expect(page.locator('.names [data-world][data-pointed]')).toHaveCount(1);
+    const key = (await page.locator('.names [data-world][data-pointed]').getAttribute('data-world'))!;
+    pointedAt.push(key);
+    await expect(page.locator(`.names [data-kin*="${key}"]`)).toHaveCount(EXAMPLES.length - 1);
+    await expect.poll(unwritten, { message: `threads with no percent, pointing at ${key}` }).toEqual([]);
+    expect((await page.evaluate(namesOnTheSky)).meeting, `pointing at ${key}`).toEqual([]);
+  }
+  expect(pointedAt.sort()).toEqual(EXAMPLES.map((id) => id.toLowerCase()).sort());
 });
 
 test('the filter, on the world: only the places of the skills listed are named', async ({ page }) => {

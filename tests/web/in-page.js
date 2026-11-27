@@ -136,3 +136,14 @@ export function namesOnTheSky() {
   if (all && aim && meet(box(all), box(aim))) meeting.push('chart all × the coordinates');
   return { names: written.filter(({ world }) => world).map(({ name }) => name), meeting };
 }
+
+/**
+ * The threads between worlds whose "how alike" cannot be read: the page lists a thread for each
+ * `[data-kin]`, and the sky writes its percent on it.
+ * @returns {string[]}
+ */
+export function threadsWithNoPercent() {
+  return [...document.querySelectorAll('.names [data-kin]')]
+    .filter((element) => !(Number(getComputedStyle(element).opacity) > 0.05))
+    .map((element) => element.getAttribute('data-kin'));
+}

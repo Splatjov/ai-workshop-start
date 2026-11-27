@@ -1525,7 +1525,8 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
    * name, another world, or what the page writes over the sky (its `[data-clear]`: the form, the
    * register, the sheet). Under or over it, a name moves along to stay on the page, or to find
    * room. The world pointed at is named first; a name with no room anywhere is left out, unless its
-   * world is pointed at. Then how alike two worlds are, along their thread, clear of all of these.
+   * world is pointed at. Then how alike two worlds are, along their thread, clear of all of these;
+   * it is never left out: with no room, it is written at the spot where it is least in the way.
    */
   function nameWorlds(apart: number) {
     const taken: [number, number, number, number][] = [];
@@ -1542,6 +1543,24 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
         const [x, y] = [clamp(other.x, left, left + wide), clamp(other.y, top, top + high)];
         return Math.hypot(other.x - x, other.y - y) < other.size + 3;
       });
+    };
+    // How much a name written there would be in the way: how much of it lies off the page, over
+    // another name or what the page writes (these count most), or over a world.
+    const inTheWay = (left: number, top: number, wide: number, high: number) => {
+      const shared = (l: number, t: number, r: number, b: number) =>
+        Math.max(0, Math.min(left + wide, r) - Math.max(left, l)) * Math.max(0, Math.min(top + high, b) - Math.max(top, t));
+      let over = 4 * (wide * high - shared(4, 4, width - 4, height - 4));
+      for (const [l, t, r, b] of taken) over += 4 * shared(l, t, r, b);
+      // Over the worlds: the share of a grid of its points that lie within one.
+      const [across, down] = [8, 4];
+      let within = 0;
+      for (let i = 0; i < across; i++) {
+        for (let j = 0; j < down; j++) {
+          const [x, y] = [left + ((i + 0.5) / across) * wide, top + ((j + 0.5) / down) * high];
+          if (order.some((other) => other.alpha >= 0.05 && Math.hypot(other.x - x, other.y - y) < other.size + 3)) within++;
+        }
+      }
+      return over + (within / (across * down)) * wide * high;
     };
     const first = pointedWorld && order.includes(pointedWorld) ? [pointedWorld] : [];
     for (const world of [...first, ...[...order].reverse().filter((world) => world !== pointedWorld)]) {
@@ -1589,17 +1608,26 @@ export function createSky(canvas: HTMLCanvasElement, slot: HTMLElement, events: 
       let opacity = 0;
       let moved = label.moved;
       if (a && b && line.shown > 0.01) {
-        // Half way along; or elsewhere along it; or half way, just over the thread or under it.
+        // Half way along; or elsewhere along it; or beside it, just over the thread or under it.
+        // With no room at any of these it is still written: at the one where it is least in the way.
         const aside = label.height / 2 + 14;
-        const spot = [[0.5, 0], [0.38, 0], [0.62, 0], [0.26, 0], [0.74, 0], [0.5, -aside], [0.5, aside]]
-          .map(([along, by]) => [lerp(a.x, b.x, along), lerp(a.y, b.y, along) + by])
-          .find(([x, y]) => clear(undefined, x - label.width / 2, y - label.height / 2, label.width, label.height));
-        const [x, y] = spot ?? [lerp(a.x, b.x, 0.5), lerp(a.y, b.y, 0.5)];
-        moved = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0)`;
-        if (spot) {
-          opacity = line.shown;
-          taken.push([x - label.width / 2 - 2, y - label.height / 2 - 2, x + label.width / 2 + 2, y + label.height / 2 + 2]);
+        const along = [0.5, 0.38, 0.62, 0.26, 0.74];
+        const spots = [...along.map((at) => [at, 0]), ...along.flatMap((at) => [[at, -aside], [at, aside]])].map(([at, by]) => [
+          lerp(a.x, b.x, at) - label.width / 2,
+          lerp(a.y, b.y, at) + by - label.height / 2,
+        ]);
+        let spot = spots.find(([left, top]) => clear(undefined, left, top, label.width, label.height));
+        if (!spot) {
+          let least = Infinity;
+          for (const [left, top] of spots) {
+            const over = inTheWay(left, top, label.width, label.height);
+            if (over < least) [least, spot] = [over, [left, top]];
+          }
         }
+        const [left, top] = spot ?? spots[0];
+        moved = `translate3d(${(left + label.width / 2).toFixed(1)}px,${(top + label.height / 2).toFixed(1)}px,0)`;
+        opacity = line.shown;
+        taken.push([left - 2, top - 2, left + label.width + 2, top + label.height + 2]);
       }
       const text = opacity <= 0.02 ? '0' : opacity.toFixed(2);
       if (text !== label.shown) label.element.style.opacity = label.shown = text;

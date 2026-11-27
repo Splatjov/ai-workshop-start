@@ -79,7 +79,10 @@ site in `web/dist`.
   clear of the other names and worlds, and of what the page writes over the sky: the title, the
   form, the register, the index, the sheet, the notes. A name with no room anywhere is left out,
   until its world is pointed at. How alike two worlds are keeps clear of the names: where one is
-  written half way along the thread, it is written elsewhere along it, or beside it
+  written half way along the thread, it is written elsewhere along it, or beside it. It is never
+  left out: every thread drawn has its percent. One with no room along its thread or beside it is
+  written at the one of these spots where it is least in the way: over a world rather than over a
+  name or what the page writes (between two worlds that all but touch: half way, where they meet)
 - Clicking a world goes to it; one not yet charted is scanned first
 - The wheel, or two fingers on a trackpad, goes nearer to the world under the pointer, and back to
   the system; where the page itself scrolls, the wheel is the page's. `Escape` and `the system`,
