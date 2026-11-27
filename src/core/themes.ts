@@ -21,7 +21,10 @@ const COMMON = new Set(
   user users want wants`.split(/\s+/),
 );
 
-/** A skill's words: of its name and description, without short, numeric and common ones; no final s. */
+/**
+ * A skill's words: of its name and description, without short, numeric and common ones; no final
+ * s, and not what is then short or common (`PRs` goes as `PR` does).
+ */
 export function words(skill: Pick<Skill, 'name' | 'description'>): Set<string> {
   const found = new Set<string>();
   for (let word of `${skill.name} ${skill.description}`.toLowerCase().split(/[^\p{L}\p{N}]+/u)) {

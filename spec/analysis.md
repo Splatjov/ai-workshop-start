@@ -18,7 +18,9 @@ groups on every run. Over the skills the filter leaves; an organization's across
 - A skill's **words**: its name and description, in lower case, split at anything but a letter or
   a digit; then without words of under 3 characters, numbers, and common words (`the`, `with`,
   `use`, `skill`, …: the list in `src/core/themes.ts`); a final `s` dropped, not of `ss`,
-  `is` or `us` (`tests` → `test`; `class`, `analysis`, `status` stay)
+  `is` or `us` (`tests` → `test`; `class`, `analysis`, `status` stay); a word that is then
+  under 3 characters or a common word is dropped too (`PRs`, `IDs`, `ways`), as `PR`, `ID` and
+  `way` are
 - A **theme word**: a word of 2 skills or more, but of at most half of them (rounded down) when
   that is more than 2: a word nearly every skill has is no theme
 - **Groups**, one at a time: the theme word that most of the skills not yet grouped have (a tie →

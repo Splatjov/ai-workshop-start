@@ -129,6 +129,9 @@ test("a skill's words: lower case, split at anything but letters and digits, no 
     [...words({ name: 'kotlin-Tests', description: 'Use it with JUnit5 for 2026 classes, a CSS class; the skill runs Gradle’s tests, against analysis status.' })],
     ['kotlin', 'test', 'junit5', 'classe', 'css', 'class', 'run', 'gradle', 'analysis', 'status'],
   );
+  // Without its final s, under 3 characters (PRs, IDs) or a common word (ways): dropped, as PR, ID and way are.
+  assert.deepEqual([...words({ name: 'review-prs', description: 'Review PRs and IDs, the ways of a PR; its ID.' })], ['review']);
+  assert.deepEqual(titles({ a: 'Open PRs', b: 'Merge PRs', c: 'x1', d: 'y1' }), ['Other: a b c d']);
 });
 
 test('a theme word: in 2 skills or more, at most half of them; a word nearly every skill has is no theme', () => {
