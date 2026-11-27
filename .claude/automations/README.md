@@ -18,7 +18,7 @@ issue opened ──▶ Issue start ──▶ pull request
 
 | Automation | Starts on | May write | Prompt | Process |
 |---|---|---|---|---|
-| **Issue start** | `issues.opened` by `Splatjov` | a new branch and one PR (`create-pr`) | [issue-fix.prompt.md](issue-fix.prompt.md) | [`issue-fix`](../skills/issue-fix/SKILL.md) |
+| **Issue start** | `issues.opened` by `Splatjov`, or by `jetbrains-air[bot]` with the label `Delegated to AI` (the skill checks the label) | a new branch and one PR (`create-pr`) | [issue-fix.prompt.md](issue-fix.prompt.md) | [`issue-fix`](../skills/issue-fix/SKILL.md) |
 | **Code Review** | `pull_request.opened`, `.synchronize`, `.ready_for_review`; author `Splatjov` or `jetbrains-air[bot]`; not a draft | nothing in git (`read-only`); one PR review | [code-review.prompt.md](code-review.prompt.md) | [`code-review`](../skills/code-review/SKILL.md) |
 | **work after code review** | `pull_request_review.submitted`, state `commented`, reviewer `jetbrains-air[bot]`; not a draft | commits on the PR branch (`push-to-source`); the merge | [review-fix.prompt.md](review-fix.prompt.md) | [`review-fix`](../skills/review-fix/SKILL.md) |
 
@@ -112,10 +112,36 @@ videos, polish the skill until you like the report; then add it to `triggers.jso
 
 - `read-only`, as the reviewer: it tests `main`, it never changes it. The evidence branch and the
   issues are written with the token, which `read-only` does not restrict, so the prompt says so.
-- Its issues are opened by `jetbrains-air[bot]`, so they do not start Issue start, which only
-  takes `Splatjov`'s: a person reads the failure and decides whether to delegate it.
+- Its issues are opened by `jetbrains-air[bot]` with no label, so Issue start, which takes the
+  bot's issues only with the label `Delegated to AI`, leaves them: a person reads the failure and
+  decides whether to delegate it (a new issue, by `Splatjov`).
 - The scripts are the source of truth: the automation follows them and never edits them; a step
   that looks wrong is a "Script notes" line in its run summary.
+
+## Red agent
+
+A fifth automation, **Red agent**, tries to break the web view with the
+[`red-agent`](../../.agents/skills/red-agent/SKILL.md) skill: off the scripts, in Chromium against
+live GitHub (odd links, races, history, a failing GitHub, the keyboard). Each bug it reproduces
+twice becomes one issue with the steps, a video and the label **`Delegated to AI`**; the evidence
+goes to the `red-agent/runs` side branch. At most 3 issues a run.
+
+```
+Red agent ──▶ issue by jetbrains-air[bot], "Delegated to AI" ──▶ Issue start ──▶ PR ──▶ review loop ──▶ merge
+```
+
+- Instructions: [red-agent.prompt.md](red-agent.prompt.md), on `main`, output `read-only`, no
+  event trigger (**Run Now**, or a schedule). Like Manual QA, it writes to GitHub with the token
+  (the evidence branch, the issues, the label), which `read-only` does not restrict.
+- **Why the bot's issues are trusted only with the label.** Issue start's second trigger takes
+  every issue opened by `jetbrains-air[bot]`: only this repository's automations open issues as
+  the bot, and a stranger can neither open one as the bot nor label one (labels need triage
+  access). `issue-fix` step 1 then requires `Delegated to AI`, so Manual QA's unlabelled issues
+  still wait for a person. The label is read when the issue is opened: adding it later starts
+  nothing (there is no `issues.labeled` trigger).
+- To stop it: pause Red agent. To stop only its fixes: remove the bot's trigger of Issue start.
+
+**Not in `triggers.json` yet**: add it there with its id once it is created in Air.
 
 ## What the platform does (checked on 2026-11-26)
 
