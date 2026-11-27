@@ -1,3 +1,4 @@
+import { kept, keeping, type ScanCache } from './cache.ts';
 import { AtlasError } from './errors.ts';
 import { SKILL_ROOTS } from './find.ts';
 import { pooled, type OrganizationSource, type Source } from './scan.ts';
@@ -19,6 +20,11 @@ export type GitHubOptions = {
    * code search answers without CORS headers, so a page cannot read it.
    */
   codeSearch?: boolean;
+  /**
+   * The CLI's: what was read at a commit, for the next scan of it. A repository's scan then asks
+   * GitHub for its commit first, and nothing more when that commit was kept.
+   */
+  cache?: ScanCache;
 };
 
 /**
@@ -50,11 +56,39 @@ export async function openGitHub(input: string, options: GitHubOptions): Promise
   if (!name) throw new AtlasError(`Not a GitHub repository URL: ${input}`);
   const github = client(options);
   if (!name.repo) return openOrganization(github, name.owner, options);
+  const commit = options.cache && (await latest(github, name.owner, name.repo, name.ref));
+  if (commit) {
+    const hit = await kept(options.cache, commit.id, commit.sha, listing(name.ref, options));
+    if (hit) return hit;
+  }
   const info = await github.json<RepositoryInfo>(
     `${API}/repos/${name.owner}/${name.repo}`,
     `Repository not found: https://github.com/${name.owner}/${name.repo}`,
   );
-  return openRepository(github, info, name.ref, options);
+  return openRepository(github, info, name.ref, options, true, commit?.sha);
+}
+
+/**
+ * The commit of the ref, or of the default branch (`HEAD`): one request. Undefined when GitHub
+ * does not answer it; the scan then asks as without a cache, and says why it cannot go on.
+ */
+async function latest(github: Client, owner: string, repo: string, ref: string | undefined) {
+  const answer = await github
+    .json<{ sha: string; html_url?: string }>(`${API}/repos/${owner}/${repo}/commits/${encodePath(ref ?? 'HEAD')}`)
+    .catch(() => undefined);
+  if (typeof answer?.sha !== 'string') return undefined;
+  // The repository's own name, as GitHub spells it, even when the URL is in another case or an old name.
+  const own = /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/commit\//.exec(answer.html_url ?? '')?.[1];
+  return { id: own ?? `${owner}/${repo}`, sha: answer.sha };
+}
+
+const SEARCHED = 'code search';
+
+/** How a repository's files are listed: through code search, or through its tree (the warning's hint). */
+function listing(ref: string | undefined, options: GitHubOptions, covered = true): string {
+  const searching = canSearch(options);
+  if (searching && !ref && covered) return SEARCHED;
+  return ref ? 'code search sees only the default branch' : searching ? 'code search does not cover this repository' : (options.tokenSource ?? ENVIRONMENT).search;
 }
 
 type RepositoryInfo = { full_name: string; default_branch: string };
@@ -63,23 +97,34 @@ type RepositoryInfo = { full_name: string; default_branch: string };
  * Resolves the ref, or else the default branch, to a commit and lists the files that may be skills.
  * `covered`: whether code search knows the repository; it does not when archived or long inactive.
  */
-async function openRepository(github: Client, info: RepositoryInfo, ref: string | undefined, options: GitHubOptions, covered = true): Promise<Source> {
+async function openRepository(
+  github: Client,
+  info: RepositoryInfo,
+  ref: string | undefined,
+  options: GitHubOptions,
+  covered = true,
+  known?: string,
+): Promise<Source> {
   const id = info.full_name;
-  const { sha } = await github.json<{ sha: string }>(
-    `${API}/repos/${id}/commits/${encodePath(ref ?? info.default_branch)}`,
-    `Not found in https://github.com/${id}: ${ref ?? info.default_branch}`,
-  );
+  const sha =
+    known ??
+    (
+      await github.json<{ sha: string }>(
+        `${API}/repos/${id}/commits/${encodePath(ref ?? info.default_branch)}`,
+        `Not found in https://github.com/${id}: ${ref ?? info.default_branch}`,
+      )
+    ).sha;
   const warnings: string[] = [];
   // Code search sees only the default branch: another ref is listed through its tree.
-  const searching = canSearch(options);
-  const search = searching && !ref && covered;
-  const hint = ref
-    ? 'code search sees only the default branch'
-    : searching
-      ? 'code search does not cover this repository'
-      : (options.tokenSource ?? ENVIRONMENT).search;
-  const paths = search ? await searchPaths(github, id) : (await treePaths(github, id, sha, warnings, hint)).paths;
-  return source(github, id, sha, paths, warnings);
+  const hint = listing(ref, options, covered);
+  const search = hint === SEARCHED;
+  // Asked for already, by openGitHub, when the commit was known before.
+  if (!search && !known) {
+    const hit = await kept(options.cache, id, sha, hint);
+    if (hit) return hit;
+  }
+  const { paths, whole } = search ? { paths: await searchPaths(github, id), whole: false } : await treePaths(github, id, sha, warnings, hint);
+  return keeping(options.cache, source(github, id, sha, paths, warnings), hint, whole);
 }
 
 /** Code search needs a token, and a client that can read its answers. */
@@ -112,7 +157,7 @@ async function openOrganization(github: Client, owner: string, options: GitHubOp
   const listed = (await listOrganization(github, login, public_repos ?? 0)).filter((repository) => !repository.fork);
   // Without code search a token only raises the limit: every tree, as without one.
   const repositories = canSearch(options)
-    ? await openCandidates(github, login, listed, warnings)
+    ? await openCandidates(github, login, listed, warnings, options.cache)
     : await pooled(listed, AT_ONCE, (info) => openListed(github, info, options));
   return {
     organization: { id: login, url: `https://github.com/${login}` },
@@ -152,7 +197,10 @@ async function openListed(github: Client, info: RepositoryInfo, options: GitHubO
       );
       // The same tree: nothing was pushed in between. Asked for by a branch, GitHub answers
       // with the commit's sha, not the tree's.
-      if (tree.sha === commit.sha || tree.sha === commit.commit.tree.sha) return source(github, id, commit.sha, paths, []);
+      if (tree.sha === commit.sha || tree.sha === commit.commit.tree.sha) {
+        // Kept: the SKILL.md files are not read again.
+        return (await kept(options.cache, id, commit.sha, WHOLE)) ?? keeping(options.cache, source(github, id, commit.sha, paths, []), WHOLE, true);
+      }
     }
     // A tree too large for one answer, a branch the tree cannot be asked for by name, a push in between.
     return await openRepository(github, info, undefined, options, false);
@@ -161,6 +209,9 @@ async function openListed(github: Client, info: RepositoryInfo, options: GitHubO
     throw error;
   }
 }
+
+/** The listing of a tree listed whole: only a record of a whole tree serves it. */
+const WHOLE = 'the whole tree';
 
 const isSkill = (path: string) => path.split('/').at(-1) === 'SKILL.md';
 
@@ -181,7 +232,13 @@ type Probed = {
  * that says their commit and whether a usual skill place is there. Only a repository with either
  * is read, whole, through its tree; the others cost no request of their own.
  */
-async function openCandidates(github: Client, login: string, listed: ListedRepository[], warnings: string[]): Promise<(Source | undefined)[]> {
+async function openCandidates(
+  github: Client,
+  login: string,
+  listed: ListedRepository[],
+  warnings: string[],
+  cache: ScanCache | undefined,
+): Promise<(Source | undefined)[]> {
   const batches: ListedRepository[][] = [];
   for (let index = 0; index < listed.length; index += PROBED_AT_ONCE) batches.push(listed.slice(index, index + PROBED_AT_ONCE));
   const [searched, probed] = await Promise.all([
@@ -197,11 +254,15 @@ async function openCandidates(github: Client, login: string, listed: ListedRepos
   return pooled(candidates, AT_ONCE, async (repository) => {
     const id = repository.nameWithOwner;
     const sha = repository.defaultBranchRef!.target.oid;
+    const hint = 'and where code search finds a SKILL.md';
+    // Kept: neither its tree nor its SKILL.md files are asked for again.
+    const hit = await kept(cache, id, sha, hint);
+    if (hit) return hit;
     const own: string[] = [];
-    const { paths, whole } = await treePaths(github, id, sha, own, 'and where code search finds a SKILL.md');
+    const { paths, whole } = await treePaths(github, id, sha, own, hint);
     // A tree listed whole has every file, and the search's index may be behind it. Code search
     // adds only what a tree too large to list leaves out.
-    return source(github, id, sha, whole ? paths : [...new Set([...paths, ...(searched.get(id) ?? [])])], own);
+    return keeping(cache, source(github, id, sha, whole ? paths : [...new Set([...paths, ...(searched.get(id) ?? [])])], own), hint, whole);
   });
 }
 
@@ -335,7 +396,12 @@ function client({ fetch, token, tokenSource = ENVIRONMENT }: GitHubOptions) {
   return {
     /** A GitHub API answer; `notFound` explains a 404. */
     json<T>(url: string, notFound = `Not found on GitHub: ${url}`): Promise<T> {
-      if (!answers.has(url)) answers.set(url, request(url, notFound));
+      if (!answers.has(url)) {
+        const answer = request(url, notFound);
+        // A failure is not remembered: asked for again, the URL gets the caller's own message.
+        answer.catch(() => answers.delete(url));
+        answers.set(url, answer);
+      }
       return answers.get(url) as Promise<T>;
     },
     /** A GraphQL answer's data; needs a token. */

@@ -2,13 +2,32 @@
 // never changes. Needs the network; GITHUB_TOKEN, if set, raises the rate limit. `npm run test:e2e`.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { test } from 'node:test';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { after, test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { CLI } from '../helpers.ts';
 
-function scan(url: string) {
+// A cache of this run's own: a scan kept by an earlier run would not ask GitHub at all.
+const CACHE = mkdtempSync(join(tmpdir(), 'skill-atlas-e2e-'));
+after(() => rmSync(CACHE, { recursive: true, force: true }));
+
+// Counts the requests of a CLI run, by host, without touching its output.
+const COUNT = fileURLToPath(new URL('./count-requests.ts', import.meta.url));
+
+/** The real CLI, with `cache` as its cache directory; `requests`: how many it sent to each host. */
+function scan(url: string, cache = CACHE) {
+  const counted = join(cache, `requests-${process.hrtime.bigint()}.json`);
   const started = performance.now();
-  const result = spawnSync(process.execPath, [CLI, 'scan', url], { encoding: 'utf8', timeout: 60_000 });
-  return { ...result, seconds: (performance.now() - started) / 1000 };
+  const result = spawnSync(process.execPath, ['--import', COUNT, CLI, 'scan', url], {
+    encoding: 'utf8',
+    timeout: 60_000,
+    env: { ...process.env, XDG_CACHE_HOME: cache, SKILL_ATLAS_E2E_REQUESTS: counted },
+  });
+  const seconds = (performance.now() - started) / 1000;
+  const requests: Record<string, number> = existsSync(counted) ? JSON.parse(readFileSync(counted, 'utf8')) : {};
+  return { ...result, seconds, requests };
 }
 
 test('JetBrains/koog at 709079e: skills in .claude/skills and deep in the test resources', () => {
@@ -44,4 +63,25 @@ test('JetBrains/android at 294d4c0: a tree too large for one answer, under 10 s'
     'warning: the tree is too large to list at once; looked only in .agents/skills, .claude/skills, .github/skills, agent/skills (code search sees only the default branch)\n',
   );
   assert.ok(result.seconds < 10, `took ${result.seconds.toFixed(1)} s`);
+});
+
+test('JetBrains/koog at 709079e, scanned again: the same output, from the cache', () => {
+  // A cache of this test's own: the first test kept this commit in CACHE, which would serve both scans.
+  const cache = mkdtempSync(join(tmpdir(), 'skill-atlas-e2e-again-'));
+  after(() => rmSync(cache, { recursive: true, force: true }));
+  const url = 'https://github.com/JetBrains/koog/tree/709079e';
+  const record = join(cache, 'skill-atlas', 'jetbrains', 'koog', '709079e4a34d6c9234583352550e6a2b88a0bb85.json');
+
+  // The first scan reads GitHub: nothing is kept yet, and the SKILL.md files are fetched.
+  assert.ok(!existsSync(record));
+  const first = scan(url, cache);
+  assert.equal(first.status, 0, first.stderr);
+  assert.match(first.stdout, /^JetBrains\/koog · 4 skills\n/);
+  assert.ok((first.requests['raw.githubusercontent.com'] ?? 0) > 0, `the first scan sent ${JSON.stringify(first.requests)}`);
+  assert.ok(existsSync(record));
+
+  // The second comes from the cache: one request, for the commit, and no file read.
+  const again = scan(url, cache);
+  assert.deepEqual(again.requests, { 'api.github.com': 1 });
+  assert.deepEqual([again.status, again.stdout, again.stderr], [first.status, first.stdout, first.stderr]);
 });

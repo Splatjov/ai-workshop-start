@@ -21,6 +21,8 @@ in the browser, the *Group by theme* switch.
 Set `GITHUB_TOKEN` in the environment for a higher GitHub rate limit, which an organization needs:
 `GITHUB_TOKEN=<token> ./skill-atlas scan …`; in the browser, paste it into the *GitHub token* field. `npm test` runs the tests; `npm run test:e2e`, the end-to-end ones on real repositories.
 A `/tree/<commit>` URL scans that commit: `./skill-atlas scan https://github.com/JetBrains/koog/tree/709079e`.
+A repository's scan is kept in `~/.cache/skill-atlas` (or `$XDG_CACHE_HOME/skill-atlas`), by commit: a rescan of
+an unchanged commit asks GitHub for that commit only. Delete the directory to start over.
 
 In the browser: `npm run web` opens a hand-drawn page with a field for the repository or organization link, a token field, a filter, the
 skills and each one's `SKILL.md`, with nine example repositories one click away; `npm run test:web`
