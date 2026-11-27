@@ -42,7 +42,7 @@ export function skillLink(repository: Repository, skill: Skill): string {
 }
 
 /** By name, then by path: the same order everywhere, whatever the locale. */
-export function sortSkills(skills: Skill[]): Skill[] {
+export function sortSkills<T extends Skill>(skills: T[]): T[] {
   const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
   return [...skills].sort((a, b) => compare(a.name, b.name) || compare(a.path, b.path));
 }

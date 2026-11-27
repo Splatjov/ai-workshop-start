@@ -93,19 +93,35 @@ header p {
 
 .filter {
   display: flex;
+  /* On a narrow screen the switch goes under the field, which keeps the row. */
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   margin-top: 16px;
-  max-width: 520px;
+  max-width: 720px;
 }
 
 .filter .drawably-inputbox {
-  flex: 1;
+  flex: 1 1 240px;
   display: block;
 }
 
 .filter input {
   width: 100%;
+}
+
+.filter .group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+nav[aria-label='Skills'] h3 small {
+  color: #57534e;
+  font-size: 16px;
+  font-weight: normal;
 }
 
 .nothing {

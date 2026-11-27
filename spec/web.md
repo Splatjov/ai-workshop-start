@@ -14,6 +14,12 @@ controls and [@sketchyicons/react](https://www.npmjs.com/package/@sketchyicons/r
   typing: only the matching skills are listed, the count reads `M of N skills`; the chosen skill
   stays if it matches, else the first match is chosen; no match → `No skill matches “<words>”`,
   nothing chosen. A new scan clears it
+- **Group by theme**: a switch next to the filter, off at first. On: the skills under their
+  themes (`spec/analysis.md`, "Themes"), each `<title> · N skills`, instead of under their
+  repositories; of an organization, each skill's path after its repository's `owner/repo/`. With
+  the filter, of the skills it leaves. The chosen skill stays; else the first one shown is chosen.
+  It stays as set for the next scan; *not* in the address, *not* stored. On a narrow screen (a
+  phone) it goes under the filter, which keeps the whole row
 - **Organization**: `<owner>`, linked, and `N skills in R repositories`; the skills under their
   repository's `owner/repo`, linked at its scanned commit; the first skill of the first repository
   is chosen. The filter spans every repository; one without a match is not listed
@@ -42,11 +48,11 @@ controls and [@sketchyicons/react](https://www.npmjs.com/package/@sketchyicons/r
 ## Recordings and screenshots
 - **The demo as a test**: `tests/web/walkthrough.spec.ts` walks the page as a user would (open,
   scan a repository, choose a skill, filter, a filter without a match; an organization, its
-  filter, a link that cannot be scanned) and after each step checks what the user should see
+  filter, a link that cannot be scanned; skills grouped by theme) and after each step checks what the user should see
 - **A video of every run**: every test of `npm run test:web` records one into `test-results/`;
   CI keeps them, with the HTML report, as the `web-recordings` artifact, passed or failed
 - **Screenshots at the key moments** (`start`, `repository`, `skill`, `filter`, `no-match`,
-  `organization`, `error`): the whole page, compared pixel by pixel with its reviewed baseline in
+  `organization`, `error`, `themes`): the whole page, compared pixel by pixel with its reviewed baseline in
   `tests/web/__screenshots__/`. One pixel off fails the check; CI keeps its expected, actual and
   diff images, side by side in the HTML report
 - **The same pixels on every run**: the recorded GitHub answers, a 1280×800 viewport at scale 1,
