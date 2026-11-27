@@ -1,58 +1,21 @@
 // spec/web.md: the page, as a user sees it, over recorded GitHub answers.
-import { expect, test, type Locator, type Page } from '@playwright/test';
-import { answer as text } from '../../src/core/replay.ts';
-import { BROKEN_MD, COMMIT, COMMITS_MD, GAMMA_COMMIT, GRADLE_MD, RECORDING, STYLE_MD } from './recording.ts';
+import { expect, test, type Locator } from '@playwright/test';
+import { chosen, filterField, recorded, scan, skillButtons, type Recorded } from './github.ts';
+import { placesInView } from './in-page.js';
+import { BROKEN_MD, COMMIT, COMMITS_MD, GAMMA_COMMIT, GRADLE_MD, MANY_BIG_MD, MANY_ONE_LINE_MD, STYLE_MD } from './recording.ts';
 
 const blob = `https://github.com/JetBrains/atlas-demo/blob/${COMMIT}`;
 let requests: string[];
 let answered: string[];
-/** The Authorization header of each request to the GitHub API. */
-let authorizations: (string | undefined)[];
+let authorizations: Recorded['authorizations'];
 let errors: string[];
-/** GitHub's answers for URLs matching a pattern wait until its promise resolves: a slow repository. */
-let holds: { pattern: RegExp; open: Promise<void> }[];
+let slow: Recorded['slow'];
 
-/** Holds the answers for `repository` until the returned function is called. */
-function slow(repository: string): () => void {
-  let release!: () => void;
-  holds.push({ pattern: new RegExp(`/${repository}[/?]`), open: new Promise((resolve) => (release = resolve)) });
-  return release;
-}
-
-test.beforeEach(async ({ page, context }) => {
-  requests = [];
-  answered = [];
-  authorizations = [];
-  errors = [];
-  holds = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  // GitHub answers from the recording, in every tab; anything else on GitHub fails, as the network would.
-  await context.route(/^https:\/\/(api\.github\.com|raw\.githubusercontent\.com)\//, async (route) => {
-    const url = route.request().url();
-    requests.push(url);
-    if (url.startsWith('https://api.github.com/')) authorizations.push(route.request().headers().authorization);
-    const answer = RECORDING[url];
-    for (const { pattern, open } of holds) if (pattern.test(url)) await open;
-    if (!answer) return route.abort('internetdisconnected');
-    await route.fulfill({
-      status: answer.status,
-      body: text(answer, route.request().postData() ?? ''),
-      // As GitHub: code search answers without CORS headers, so a page cannot read it.
-      headers: url.startsWith('https://api.github.com/search/code') ? {} : { 'access-control-allow-origin': '*' },
-    });
-    answered.push(url);
-  });
+test.beforeEach(async ({ page }) => {
+  ({ requests, answered, authorizations, errors, slow } = await recorded(page));
 });
 
 test.afterEach(() => expect(errors, 'errors in the page').toEqual([]));
-
-async function scan(page: Page, url: string) {
-  await page.getByLabel('Repository link').fill(url);
-  await page.getByRole('button', { name: 'Scan' }).click();
-}
-
-const skillButtons = (page: Page) => page.getByRole('navigation', { name: 'Skills' }).getByRole('button');
-const chosen = (page: Page) => page.getByRole('region', { name: /: SKILL\.md$/ });
 
 test('a field for the repository link, hand-drawn icons, nothing scanned yet', async ({ page }) => {
   await page.goto('./');
@@ -97,6 +60,11 @@ test('choosing a skill: the whole description, the pinned link, its copies and i
   await expect(skill.getByRole('link')).toHaveAttribute('href', `${blob}/.claude/skills/commits/SKILL.md`);
   await expect(skill).toContainText('also in .github/skills/commits/SKILL.md');
   await expect(skill.getByLabel('SKILL.md')).toHaveText(COMMITS_MD);
+  // Its size, and its text line by line, as scanned: the lines, joined, are the file.
+  await expect(skill).toContainText(`7 lines · ${new TextEncoder().encode(COMMITS_MD).length} B`);
+  await expect(skill.locator('pre .line')).toHaveCount(7);
+  expect(await skill.locator('pre').evaluate((pre) => pre.textContent)).toBe(COMMITS_MD);
+  await expect(skill.locator('pre .line.matter')).toHaveText(['---', 'name: commits', /^description: /, '---']);
 });
 
 test('warnings: under the repository, as notes; the skill is still shown', async ({ page }) => {
@@ -105,6 +73,71 @@ test('warnings: under the repository, as notes; the skill is still shown', async
   await expect(page.getByRole('note')).toHaveText([/^tools\/release\/SKILL\.md: malformed front matter: .*; using the directory name$/]);
   await skillButtons(page).filter({ hasText: 'release' }).click();
   await expect(chosen(page).getByLabel('SKILL.md')).toHaveText(BROKEN_MD);
+});
+
+test('the size of a SKILL.md: its lines and its bytes, in kB from a thousand', async ({ page }) => {
+  await page.goto('./');
+  await scan(page, 'https://github.com/JetBrains/many');
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/many 24 skills');
+
+  await skillButtons(page).nth(1).click();
+  const bytes = new TextEncoder().encode(MANY_BIG_MD).length;
+  expect(bytes).toBeGreaterThan(1000);
+  await expect(chosen(page)).toContainText(`${MANY_BIG_MD.split('\n').length - 1} lines · ${(bytes / 1000).toFixed(1)} kB`);
+  await expect(chosen(page).getByLabel('SKILL.md')).toHaveText(MANY_BIG_MD);
+
+  await skillButtons(page).nth(2).click();
+  await expect(chosen(page)).toContainText('1 line · 10 B');
+  await expect(chosen(page).getByLabel('SKILL.md')).toHaveText(MANY_ONE_LINE_MD);
+});
+
+test('many warnings: each one a note, and the index keeps its room', async ({ page }) => {
+  await page.goto('./');
+  await scan(page, 'https://github.com/JetBrains/many');
+  const notes = page.getByRole('note');
+  await expect(notes).toHaveCount(9);
+  await expect(notes.filter({ hasText: 'malformed front matter' })).toHaveCount(8);
+  await expect(notes.filter({ hasText: 'no front matter' })).toHaveText('.claude/skills/skill-03/SKILL.md: no front matter; using the directory name');
+
+  const index = (await page.getByRole('navigation', { name: 'Skills' }).boundingBox())!;
+  expect(index.height).toBeGreaterThan(200);
+  await expect(skillButtons(page).first()).toBeInViewport({ ratio: 1 });
+  await notes.last().scrollIntoViewIfNeeded(); // the notes scroll in their own corner
+  await expect(notes.last()).toBeInViewport({ ratio: 1 });
+  await expect(skillButtons(page).first()).toBeInViewport({ ratio: 1 });
+});
+
+test('a long index: the chosen skill stays in view, however it is chosen', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' }); // the world turns at once, so its places stand still
+  await page.goto('./');
+  await scan(page, 'https://github.com/JetBrains/many');
+  const buttons = skillButtons(page);
+  await expect(buttons).toHaveCount(24);
+  await expect(buttons.nth(17)).not.toBeInViewport();
+
+  // By a click, far down the index: it stays where it was clicked.
+  await buttons.nth(17).click();
+  await expect(buttons.nth(17)).toHaveAttribute('aria-current', 'true');
+  await expect(buttons.nth(17)).toBeInViewport({ ratio: 1 });
+
+  // By the keys, on and on: the index follows.
+  for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowDown');
+  await expect(buttons.nth(22)).toBeFocused();
+  await expect(buttons.nth(22)).toBeInViewport({ ratio: 1 });
+  for (let i = 0; i < 20; i++) await page.keyboard.press('ArrowUp');
+  await expect(buttons.nth(2)).toHaveAttribute('aria-current', 'true');
+  await expect(buttons.nth(2)).toBeInViewport({ ratio: 1 });
+
+  // By its place, on the world: the index scrolls to a skill that was out of view.
+  await expect.poll(() => page.evaluate(placesInView)).toContain('skill-03');
+  const far = (await page.evaluate(placesInView)).filter((name) => name >= 'skill-12').at(-1);
+  expect(far, 'a place in view whose skill is far down the index').toBeDefined();
+  const entry = buttons.filter({ hasText: far });
+  await expect(entry).not.toBeInViewport();
+  const at = (await page.locator('[data-place]').filter({ hasText: far }).boundingBox())!;
+  await page.mouse.click(at.x, at.y);
+  await expect(entry).toHaveAttribute('aria-current', 'true');
+  await expect(entry).toBeInViewport({ ratio: 1 });
 });
 
 test('a /tree/<ref> URL scans that commit', async ({ page }) => {
@@ -175,6 +208,11 @@ test('examples: nine repositories with skills, each a link that fills the field 
   await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/koog 1 skill');
   await expect(chosen(page).getByRole('heading', { level: 3 })).toHaveText('commits');
   expect(new URL(page.url()).searchParams.get('repo')).toBe('https://github.com/JetBrains/koog');
+
+  // With a world in view, the examples are out of it; back over the system, they are there again.
+  await expect(page.getByRole('navigation', { name: 'Examples' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(examples).toHaveCount(9);
 });
 
 test('examples: Ctrl/Cmd-, Shift- and middle-click open a new tab or window, this page does not scan', async ({ page, context }) => {
@@ -230,8 +268,6 @@ test('a later scan that ends first stays shown when the earlier one answers', as
   await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/koog 1 skill');
   await expect(page.locator('form').getByRole('button')).toBeEnabled();
 });
-
-const filterField = (page: Page) => page.getByLabel('Filter skills');
 
 test('filter: only the matching skills, M of N skills; the chosen one stays, or else the first match', async ({ page }) => {
   await page.goto('./');

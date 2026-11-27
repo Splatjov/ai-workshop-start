@@ -11,11 +11,13 @@ export default defineConfig({
   testDir: 'tests/web',
   testMatch: '*.spec.ts',
   forbidOnly: Boolean(process.env.CI),
+  // The sky is WebGL, and a machine without a GPU draws it in software: slowly.
+  timeout: 60_000,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
   ignoreSnapshots: !process.env.SCREENSHOTS,
   // One baseline per screenshot, not per platform: there is only one platform that makes them.
   snapshotPathTemplate: '{testDir}/__screenshots__/{testFileName}/{arg}{ext}',
-  expect: { toHaveScreenshot: { animations: 'disabled', caret: 'hide', scale: 'css' } },
+  expect: { timeout: 10_000, toHaveScreenshot: { animations: 'disabled', caret: 'hide', scale: 'css' } },
   use: {
     baseURL: 'http://localhost:4173/',
     trace: 'retain-on-failure',

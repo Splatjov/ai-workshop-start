@@ -39,6 +39,40 @@ export function graphql(repositories: Record<string, { commit?: string; places?:
 
 const blob = (path: string) => ({ path, mode: '100644', type: 'blob', sha: path });
 
+export const SOURDOUGH_MD = '---\nname: sourdough\ndescription: Bake a loaf of sourdough bread.\n---\n# Sourdough\n\nFeed the starter, fold the dough, proof overnight.\n';
+export const TOMATOES_MD = '---\nname: tomatoes\ndescription: Grow tomatoes on a balcony.\n---\n# Tomatoes\n\nSow in March, pinch the side shoots, water at the roots.\n';
+
+/** The page's examples but JetBrains/koog: each with one skill of its own, like no other's. */
+export const OTHER_EXAMPLES: Record<string, string> = {
+  'anthropics/skills': 'spreadsheets',
+  'obra/superpowers': 'brainstorming',
+  'vercel-labs/agent-skills': 'deployments',
+  'openai/codex': 'sandboxing',
+  'huggingface/skills': 'datasets',
+  'trailofbits/skills': 'fuzzing',
+  'getsentry/skills': 'tracing',
+  'JetBrains/kotlin': 'coroutines',
+};
+
+// JetBrains/many: 24 skills in one directory. The second is over a thousand bytes, the third is one
+// line with no front matter, and the last eight have malformed front matter: nine warnings. The
+// last one's name is too long to be written beside its star.
+export const MANY_LONG_NAME = 'skill-24-with-a-very-long-name';
+export const MANY_BIG_MD = `---\nname: skill-02\ndescription: The long one.\n---\n# Skill 02\n\n${'Read the module, run the checks, write down what changed.\n'.repeat(24)}`;
+export const MANY_ONE_LINE_MD = '# Skill 03';
+const many = Array.from({ length: 24 }, (_, i) => {
+  const name = i === 23 ? MANY_LONG_NAME : `skill-${String(i + 1).padStart(2, '0')}`;
+  const text =
+    i === 1
+      ? MANY_BIG_MD
+      : i === 2
+        ? MANY_ONE_LINE_MD
+        : i >= 16
+          ? `---\nname: ${name}: broken: x\n---\n# ${name}\n`
+          : `---\nname: ${name}\ndescription: Does the thing number ${i + 1}.\n---\n# ${name}\n`;
+  return { path: `.claude/skills/${name}/SKILL.md`, text };
+});
+
 const ALPHA_TREE = [blob('.claude/skills/commits/SKILL.md'), blob('docs/code-style/SKILL.md'), blob('README.md')];
 const GAMMA_TREE = [blob('build/gradle/SKILL.md'), blob('tools/release/SKILL.md')];
 
@@ -81,6 +115,41 @@ export const RECORDING: Recording = {
   [`${API}/JetBrains/koog/commits/develop`]: ok({ sha: COMMIT }),
   [`${API}/JetBrains/koog/git/trees/${COMMIT}?recursive=1`]: ok({ truncated: false, tree: [blob('.claude/skills/commits/SKILL.md')] }),
   [`${RAW}/JetBrains/koog/${COMMIT}/.claude/skills/commits/SKILL.md`]: ok(COMMITS_MD),
+
+  [`${API}/JetBrains/many`]: ok({ full_name: 'JetBrains/many', default_branch: 'main' }),
+  [`${API}/JetBrains/many/commits/main`]: ok({ sha: COMMIT }),
+  [`${API}/JetBrains/many/git/trees/${COMMIT}?recursive=1`]: ok({ truncated: false, tree: many.map(({ path }) => blob(path)) }),
+  ...Object.fromEntries(many.map(({ path, text }) => [`${RAW}/JetBrains/many/${COMMIT}/${path}`, ok(text)])),
+
+  // JetBrains/atlas-twin: the same three skills as JetBrains/atlas-demo, and no copy.
+  [`${API}/JetBrains/atlas-twin`]: ok({ full_name: 'JetBrains/atlas-twin', default_branch: 'main' }),
+  [`${API}/JetBrains/atlas-twin/commits/main`]: ok({ sha: COMMIT }),
+  [`${API}/JetBrains/atlas-twin/git/trees/${COMMIT}?recursive=1`]: ok({
+    truncated: false,
+    tree: [blob('.claude/skills/commits/SKILL.md'), blob('docs/code-style/SKILL.md'), blob('tools/release/SKILL.md')],
+  }),
+  [`${RAW}/JetBrains/atlas-twin/${COMMIT}/.claude/skills/commits/SKILL.md`]: ok(COMMITS_MD),
+  [`${RAW}/JetBrains/atlas-twin/${COMMIT}/docs/code-style/SKILL.md`]: ok(STYLE_MD),
+  [`${RAW}/JetBrains/atlas-twin/${COMMIT}/tools/release/SKILL.md`]: ok(BROKEN_MD),
+
+  // JetBrains/garden: two skills that have nothing in common with the others'.
+  [`${API}/JetBrains/garden`]: ok({ full_name: 'JetBrains/garden', default_branch: 'main' }),
+  [`${API}/JetBrains/garden/commits/main`]: ok({ sha: COMMIT }),
+  [`${API}/JetBrains/garden/git/trees/${COMMIT}?recursive=1`]: ok({
+    truncated: false,
+    tree: [blob('skills/sourdough/SKILL.md'), blob('skills/tomatoes/SKILL.md')],
+  }),
+  [`${RAW}/JetBrains/garden/${COMMIT}/skills/sourdough/SKILL.md`]: ok(SOURDOUGH_MD),
+  [`${RAW}/JetBrains/garden/${COMMIT}/skills/tomatoes/SKILL.md`]: ok(TOMATOES_MD),
+
+  ...Object.fromEntries(
+    Object.entries(OTHER_EXAMPLES).flatMap(([id, name]) => [
+      [`${API}/${id}`, ok({ full_name: id, default_branch: 'main' })],
+      [`${API}/${id}/commits/main`, ok({ sha: COMMIT })],
+      [`${API}/${id}/git/trees/${COMMIT}?recursive=1`, ok({ truncated: false, tree: [blob(`skills/${name}/SKILL.md`)] })],
+      [`${RAW}/${id}/${COMMIT}/skills/${name}/SKILL.md`, ok(`---\nname: ${name}\ndescription: All about ${name}.\n---\n# ${name}\n`)],
+    ]),
+  ),
 
   // JetBrains/no-such-repository: not there.
   [`${API}/JetBrains/no-such-repository`]: { status: 404, body: { message: 'Not Found' } },

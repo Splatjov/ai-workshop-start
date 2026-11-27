@@ -1,138 +1,109 @@
+/* An atlas of worlds, drawn by hand. Day: pen on paper. Night: chalk on cyanotype. */
+
 :root {
-  --drawably-stroke: #1f3a8a;
-  --drawably-fill: #1f3a8a;
-  color: #1c1917;
-  background: #fbfaf6;
-  font-family: Inter, system-ui, sans-serif;
+  color-scheme: light;
+  --paper: #f3eee2;
+  --sheet: #fcf9f1;
+  --ink: #1b2d88;
+  --ink-rgb: 27 45 136;
+  --pencil: #6d675b;
+  --accent: #e4412b;
+  --marker: #ffc21a;
+  --warn: #a8530c;
+  --shade: 30 34 80;
+  --grain: 0.5;
+  --sky-blend: multiply;
+  --wash-blend: multiply;
+
+  --drawably-stroke: var(--ink);
+  --drawably-fill: var(--ink);
+  --drawably-paper: var(--paper);
+  --drawably-error: var(--accent);
+
+  --pen: 'Drawably Pen', 'Fraunces Variable', cursive;
+  --serif: 'Fraunces Variable', 'Iowan Old Style', Georgia, serif;
+  --mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+  --ease: cubic-bezier(0.2, 0.7, 0.1, 1);
+
+  font-family: var(--serif);
+  font-optical-sizing: auto;
+  color: var(--ink);
+  background: var(--paper);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+:root[data-theme='night'] {
+  color-scheme: dark;
+  --paper: #0c2760;
+  --sheet: #113172;
+  --ink: #eef3ff;
+  --ink-rgb: 238 243 255;
+  --pencil: #a9bdec;
+  --accent: #ffc247;
+  --marker: #4f86ff;
+  --warn: #ffd58f;
+  --shade: 2 8 30;
+  --grain: 0.35;
+  --sky-blend: screen;
+  --wash-blend: screen;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
 }
 
 body {
-  margin: 0;
+  overflow-x: hidden;
 }
 
-main {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 32px 24px 64px;
+/* The page: paper with a grain, a dot grid as in a notebook, darker towards its edges. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(130% 100% at 50% 42%, transparent 52%, rgb(var(--shade) / 0.13) 100%),
+    radial-gradient(circle at 1px 1px, rgb(var(--ink-rgb) / 0.16) 0.9px, transparent 1.5px) 13px 13px / 26px 26px;
 }
 
-h1,
-h2,
-h3 {
-  font-family: 'Drawably Pen', Inter, system-ui, sans-serif;
-  font-weight: normal;
-  display: flex;
-  align-items: center;
-  gap: 10px;
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: var(--grain);
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='n' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .2  0 0 0 0 .17  0 0 0 0 .12  0 0 0 .7 -.22'/%3E%3C/filter%3E%3Crect width='260' height='260' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-h1 {
-  font-size: 44px;
-  margin: 0 0 4px;
+/* drawably's sketches take the page's own type, not Inter. */
+.drawably-host {
+  font-family: inherit;
 }
 
-header p {
-  margin: 0 0 24px;
-  color: #57534e;
+::selection {
+  background: var(--marker);
+  color: #14204f;
 }
 
-.scan {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+a {
+  color: inherit;
 }
 
-.scan .drawably-inputbox {
-  flex: 1;
-  display: block;
-}
-
-.scan input {
-  width: 100%;
-  font-size: 16px;
-}
-
-.scan button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.token {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-  margin-top: 12px;
-  font-size: 14px;
-  color: #57534e;
-}
-
-.token label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: #1c1917;
-}
-
-.token .drawably-inputbox {
-  flex: 0 1 260px;
-}
-
-.token input {
-  width: 100%;
-}
-
-.token span {
-  flex: 1 1 320px;
-}
-
-.token a {
-  color: #1f3a8a;
-}
-
-.filter {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 16px;
-  max-width: 520px;
-}
-
-.filter .drawably-inputbox {
-  flex: 1;
-  display: block;
-}
-
-.filter input {
-  width: 100%;
-}
-
-.nothing {
-  color: #57534e;
-}
-
-.examples {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px;
-  margin-top: 12px;
-  font-size: 14px;
-  color: #57534e;
-}
-
-.examples ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-flow: row wrap;
-  gap: 4px 14px;
-}
-
-.examples a {
-  color: #1f3a8a;
+button {
+  color: inherit;
+  font: inherit;
 }
 
 .visually-hidden {
@@ -143,139 +114,1648 @@ header p {
   clip-path: inset(50%);
 }
 
+/* ---- the sky: one canvas behind the whole page, and what is written beside what it draws ------- */
+
+.sky {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  mix-blend-mode: var(--sky-blend);
+}
+
+.names {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.names span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  will-change: transform, opacity;
+  transition: opacity 180ms linear;
+}
+
+/* Each name's element is a point, at what it names; the name hangs beside it. */
+.names i {
+  position: absolute;
+  top: 0;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+/* A world's name is written under it; over it or beside it where that is taken. */
+.names [data-world] i {
+  left: 0;
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  transform: translate(-50%, var(--gap, 60px));
+}
+
+.names [data-world][data-side='over'] i {
+  transform: translate(-50%, calc(-100% - var(--gap, 60px)));
+}
+
+.names [data-world][data-side='right'] i {
+  justify-items: start;
+  transform: translate(var(--gap, 60px), -50%);
+}
+
+.names [data-world][data-side='left'] i {
+  justify-items: end;
+  transform: translate(calc(-100% - var(--gap, 60px)), -50%);
+}
+
+.names [data-world] b {
+  font: 400 17px/1 var(--pen);
+  color: var(--ink);
+  padding: 1px 6px 2px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--paper) 72%, transparent);
+  box-shadow: 0 0 5px 3px color-mix(in srgb, var(--paper) 72%, transparent);
+}
+
+/* What is known of it: how many skills, once it is pointed at; or that it is being scanned, or was not found. */
+.names [data-world] small {
+  font: 500 8.5px/1 var(--mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--pencil);
+}
+
+.names [data-world]:is([data-state='charted'], [data-state='uncharted']):not([data-pointed]) small {
+  display: none;
+}
+
+.names [data-world]:is([data-state='uncharted'], [data-state='scanning']) b {
+  color: var(--pencil);
+}
+
+.names [data-world][data-state='lost'] :is(b, small),
+.names [data-world][data-state='scanning'] small {
+  color: var(--accent);
+}
+
+.names [data-world][data-pointed] {
+  z-index: 1;
+}
+
+.names [data-world][data-pointed] b {
+  color: var(--accent);
+}
+
+/* How alike two worlds are, written in the middle of the thread between them. */
+.names [data-kin] i {
+  transform: translate(-50%, -50%);
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  padding: 3px 5px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  box-shadow: 0 0 4px 2px color-mix(in srgb, var(--paper) 88%, transparent);
+}
+
+.names [data-place] i {
+  left: var(--gap, 12px);
+  transform: translateY(-50%);
+  font: 400 17px/1.15 var(--pen);
+  color: var(--ink);
+  padding: 1px 5px 2px;
+  border-radius: 9px;
+  /* A little paper under the letters, so the lines behind do not strike them through. */
+  background: color-mix(in srgb, var(--paper) 80%, transparent);
+  box-shadow: 0 0 5px 3px color-mix(in srgb, var(--paper) 80%, transparent);
+}
+
+.names [data-place][data-side='left'] i {
+  left: auto;
+  right: var(--gap, 12px);
+}
+
+.names [data-place][data-side='above'] i {
+  left: var(--shift, 0px);
+  transform: translate(-50%, calc(-100% - var(--gap, 12px) - 4px));
+}
+
+.names [data-place]:is([data-pointed], [data-chosen]) {
+  z-index: 1;
+}
+
+/* A place the filter leaves out keeps its mark, and loses its name. */
+.names [data-place][data-out] {
+  display: none;
+}
+
+.names [data-place][data-chosen] i {
+  color: var(--accent);
+  font-size: 20px;
+}
+
+.names [data-land] i {
+  transform: translate(-50%, -50%);
+  font: 500 9.5px/1 var(--mono);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--pencil);
+  padding: 2px 5px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--paper) 70%, transparent);
+}
+
+:root[data-sky='none'] :is(.sky, .names),
+:root[data-sky='drawing'] .names {
+  display: none;
+}
+
+/* ---- the plate: a neatline round the page, and what is written in its margin ------------------ */
+
+.plate {
+  --zoom: 0;
+}
+
+.neatline {
+  position: fixed;
+  inset: 12px;
+  z-index: 3;
+  padding: 0;
+  pointer-events: none;
+  --drawably-width: 1.4;
+}
+
+.margin {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  font: 500 10px/1 var(--mono);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--pencil);
+}
+
+.margin span {
+  position: absolute;
+  white-space: pre;
+}
+
+.margin .plate-name {
+  left: 31px;
+  top: 50%;
+  writing-mode: vertical-rl;
+  transform: translateY(-50%) rotate(180deg);
+}
+
+.margin .aim {
+  left: 56px;
+  bottom: 27px;
+  font-variant-numeric: tabular-nums;
+}
+
+.margin .epoch {
+  right: 56px;
+  bottom: 27px;
+}
+
+.exposure {
+  position: fixed;
+  top: 30px;
+  right: 40px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+/* The night spreads from the switch: the page's own animation draws the circle. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* ---- the page ---------------------------------------------------------------------------------- */
+
+main {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  min-height: 100dvh;
+  padding: 44px 64px 52px 78px;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: normal;
+  margin: 0;
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 clamp(12px, 2.4vh, 26px);
+  font: 500 11px/1 var(--mono);
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--pencil);
+}
+
+/* The title is set as an atlas's title page is: in a serif cut for display, as large as the page takes. */
+h1 {
+  position: relative;
+  width: max-content;
+  max-width: 100%;
+  font-family: var(--serif);
+  font-weight: 300;
+  font-variation-settings: 'opsz' 144, 'SOFT' 0, 'WONK' 0;
+  line-height: 0.8;
+  letter-spacing: -0.045em;
+}
+
+h1 .word + .word {
+  font-style: italic;
+  font-weight: 340;
+  font-variation-settings: 'opsz' 144, 'SOFT' 60, 'WONK' 1;
+}
+
+h1 .spark {
+  position: absolute;
+  flex: none;
+}
+
+.tagline {
+  margin: 0;
+  font-style: italic;
+  font-weight: 340;
+  font-variation-settings: 'SOFT' 100, 'WONK' 1;
+  color: var(--ink);
+}
+
+/* The field: a repository link, and the pen that scans it. */
+.scan {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--mono);
+}
+
+.scan > svg {
+  flex: none;
+}
+
+.scan .drawably-inputbox {
+  flex: 1;
+  display: block;
+  min-width: 0;
+}
+
+.scan input {
+  width: 100%;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.scan input::placeholder {
+  color: rgb(var(--ink-rgb) / 0.42);
+}
+
+.scan button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: 600 15px/1.4 var(--mono);
+  padding: 8px 18px;
+  white-space: nowrap;
+}
+
+/* The token: a field of its own under the link; in a line with it once the title is small. */
+.token {
+  display: grid;
+  grid-template-columns: auto minmax(0, 220px);
+  justify-content: start;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: 14px;
+  font-family: var(--mono);
+}
+
+.token label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: 500 10.5px/1 var(--mono);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--pencil);
+  white-space: nowrap;
+}
+
+.token .drawably-inputbox {
+  display: block;
+  min-width: 0;
+}
+
+.token input {
+  width: 100%;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.token input::placeholder {
+  color: rgb(var(--ink-rgb) / 0.42);
+}
+
+.token #token-hint {
+  grid-column: 1 / -1;
+  font: italic 340 13px/1.35 var(--serif);
+  color: var(--pencil);
+  max-width: 34em;
+}
+
 .error {
-  margin-top: 24px;
-  color: #b42318;
+  margin-top: 26px;
+  color: var(--accent);
+  font: 500 14px/1.45 var(--mono);
+  width: auto;
+  max-width: 100%;
+  align-items: baseline;
+  overflow-wrap: anywhere;
 }
 
-.repository {
-  margin: 32px 0 8px;
-  font-size: 28px;
+.error [data-tag] {
+  flex: none;
+  white-space: nowrap;
+  padding: 3px 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 11px;
 }
 
+/* ---- the register: the worlds of the system, and those not yet charted ------------------------- */
+
+.register {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  /* It gives way as the eye goes to a world. */
+  opacity: clamp(0, 1 - var(--zoom) * 2.4, 1);
+  transform: translateX(calc(var(--zoom) * -46px));
+}
+
+.register section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  animation: unfold-left 700ms var(--ease) both;
+}
+
+.system {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  font: 300 clamp(40px, 3.6vw, 58px) / 0.92 var(--serif);
+  font-variation-settings: 'opsz' 144, 'SOFT' 40, 'WONK' 1;
+  font-style: italic;
+  letter-spacing: -0.03em;
+}
+
+.system .drawably-badge,
 .repository .drawably-badge {
-  font-family: Inter, system-ui, sans-serif;
-  font-size: 14px;
+  padding: 5px 11px;
+  font: 600 12px/1.5 var(--mono);
+  font-style: normal;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.law {
+  margin: 12px 0 0;
+  font: italic 360 15.5px/1.4 var(--serif);
+  font-variation-settings: 'SOFT' 100;
+  color: var(--pencil);
+  max-width: 19em;
+}
+
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  margin: clamp(12px, 2.2vh, 22px) 0 0;
+  font: italic 340 16px/1.3 var(--serif);
+  color: var(--pencil);
+}
+
+.examples ul {
+  display: flex;
+  flex-flow: row wrap;
+  gap: 4px 14px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.examples a {
+  font: 500 13px/1.6 var(--mono);
+  font-style: normal;
+  color: var(--ink);
+  text-underline-offset: 4px;
+  text-decoration-color: rgb(var(--ink-rgb) / 0.4);
+}
+
+.examples a:hover {
+  text-decoration-color: var(--accent);
+}
+
+/* An example already charted is struck through with the marker; one being scanned waits in pencil. */
+.examples a[data-state='charted'] {
+  text-decoration: none;
+  background: linear-gradient(transparent 46%, color-mix(in srgb, var(--marker) 70%, transparent) 46% 88%, transparent 88%);
+}
+
+.examples a[data-state='scanning'] {
+  color: var(--pencil);
+}
+
+.examples a[data-state='lost'] {
+  color: var(--accent);
+  text-decoration-line: line-through;
+}
+
+.examples .all {
+  border: 0;
+  padding: 0 0 1px;
+  background: none;
+  font: 400 19px/1 var(--pen);
+  color: var(--accent);
+  cursor: pointer;
+  border-bottom: 1.5px solid currentColor;
+}
+
+.examples .all:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ---- an index: of the worlds of the system, or of the skills of a world ------------------------ */
+
+.index {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  margin-top: 14px;
+}
+
+.index > :is(ul, .entries) {
+  flex: 1;
+  margin: 0 -8px 0 -10px;
+  padding: 4px 8px 12px 0;
+  overflow-y: auto;
+  counter-reset: entry;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--ink-rgb) / 0.3) transparent;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 22px), transparent 100%);
+}
+
+.index ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* An organization's skills stand under their repositories. */
+.index section h3 {
+  margin: 14px 0 2px 10px;
+  font: 600 11px/1.3 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.index section:first-child h3 {
+  margin-top: 4px;
+}
+
+.index section h3 a {
+  color: var(--pencil);
+  text-underline-offset: 4px;
+  text-decoration-color: rgb(var(--ink-rgb) / 0.3);
+  overflow-wrap: anywhere;
+}
+
+.index section h3 a:hover {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+
+.index li {
+  counter-increment: entry;
+  animation: rise 500ms var(--ease) both;
+  animation-delay: calc(120ms + var(--i) * 38ms);
+}
+
+.index button {
+  position: relative;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  width: 100%;
+  padding: 9px 10px 10px 10px;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  outline: none;
+}
+
+.index button::before {
+  content: counter(entry, decimal-leading-zero);
+  grid-row: 1 / span 3;
+  padding-top: 7px;
+  font: italic 340 13px/1 var(--serif);
+  font-variant-numeric: tabular-nums;
+  color: var(--pencil);
+}
+
+.index button > * {
+  grid-column: 2;
+  min-width: 0;
+}
+
+.index button strong {
+  justify-self: start;
+  max-width: 100%;
+  font: 400 25px/1.12 var(--pen);
+  overflow-wrap: anywhere;
+  opacity: 0.86;
+  transition: opacity 160ms ease;
+}
+
+.index button span:not(.drawably-circle) {
+  margin-top: 3px;
+  font: 380 14px/1.36 var(--serif);
+  color: rgb(var(--ink-rgb) / 0.8);
+}
+
+.index button code {
+  margin-top: 4px;
+  font: 400 10.5px/1.4 var(--mono);
+  color: var(--pencil);
+  overflow-wrap: anywhere;
+}
+
+.index button:is(:hover, :focus-visible, [data-pointed]) strong,
+.index button[aria-current='true'] strong {
+  opacity: 1;
+}
+
+/* Under the pointer, here or on the sky: a swipe of the marker. */
+.index button:is(:hover, :focus-visible, [data-pointed]):not([aria-current='true']) strong {
+  background: linear-gradient(transparent 58%, color-mix(in srgb, var(--marker) 62%, transparent) 58% 92%, transparent 92%);
+}
+
+.index button:focus-visible {
+  box-shadow: inset 0 0 0 1.5px rgb(var(--ink-rgb) / 0.55);
+}
+
+.index button[aria-current='true']::before {
+  content: '✦';
+  font: 400 15px/1 var(--serif);
+  padding-top: 6px;
+  color: var(--accent);
+}
+
+/* What is written lies over the stage, where the two meet: a click on a button is the button's. */
+.masthead,
+.register {
+  position: relative;
+  z-index: 2;
+}
+
+/* ---- the stage: where the eye looks from; the sky itself is on the canvas ---------------------- */
+
+.globe {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  cursor: grab;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.globe[data-over] {
+  cursor: pointer;
+}
+
+.globe[data-dragging] {
+  cursor: grabbing;
+}
+
+.globe .still {
+  display: none;
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: min(100%, 100vh);
+  height: 100%;
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 0.7;
+  stroke-linecap: round;
+  opacity: 0.8;
+}
+
+:root[data-sky='none'] .globe {
+  cursor: default;
+}
+
+:root[data-sky='none'] .globe .still {
+  display: block;
+}
+
+.hint,
+.legend {
+  position: absolute;
+  /* In the middle of what shows of the stage: not under the sheet. */
+  left: calc(50% - var(--under, 0px) / 2);
+  bottom: 0;
+  transform: translateX(-50%);
+  margin: 0;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 400 19px/1 var(--pen);
+  color: var(--pencil);
+  transition: opacity 400ms ease;
+}
+
+.globe[data-turned] .hint,
+:root:not([data-sky='drawn']) :is(.hint, .legend, .note, .drawably-arrow) {
+  opacity: 0;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: max-content;
+  max-width: calc(100% - var(--under, 0px));
+  white-space: normal;
+  font: 500 9.5px/1 var(--mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--pencil);
+  opacity: clamp(0, (var(--zoom) - 0.6) * 3, 1);
+}
+
+.legend .mark {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-left: 10px;
+}
+
+.legend .mark:first-child {
+  margin-left: 0;
+}
+
+.legend .place {
+  background: var(--ink);
+  box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px var(--ink);
+}
+
+.legend .copy {
+  border: 1.2px solid var(--ink);
+}
+
+.legend span {
+  margin-left: 12px;
+  opacity: 0.8;
+}
+
+.legend .turn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.globe[data-turned] .legend .turn {
+  display: none;
+}
+
+/* A note in the margin of the cover, and the arrow from it to the sky. */
+.note {
+  position: absolute;
+  left: 9%;
+  top: 6%;
+  margin: 0;
+  font: 400 23px/1.05 var(--pen);
+  color: var(--accent);
+  transform: rotate(-7deg);
+  pointer-events: none;
+  transition: opacity 600ms ease 1.6s;
+}
+
+.note-target {
+  position: absolute;
+  left: 33%;
+  top: 25%;
+  width: 1px;
+  height: 1px;
+}
+
+.drawably-arrow {
+  transition: opacity 600ms ease 1.6s;
+}
+
+/* The law of the system, pencilled in the middle of the plate. */
+.law-note {
+  position: absolute;
+  left: 57%;
+  top: 51%;
+  margin: 0;
+  font: 400 16px/1.1 var(--pen);
+  text-align: center;
+  color: var(--pencil);
+  transform: translate(-50%, -50%) rotate(-3deg);
+  pointer-events: none;
+  opacity: clamp(0, 1 - var(--zoom) * 3, 1);
+}
+
+:root:not([data-sky='drawn']) .law-note {
+  display: none;
+}
+
+/* ---- the cover: nothing charted yet ------------------------------------------------------------ */
+
+.plate[data-view='cover'] main {
+  grid-template-columns: minmax(0, 0.84fr) minmax(0, 1.16fr);
+  grid-template-rows: 1fr auto auto 1.1fr;
+  column-gap: 2vw;
+}
+
+.plate[data-view='cover'] .masthead {
+  grid-column: 1;
+  grid-row: 2;
+  max-width: 700px;
+  opacity: clamp(0, 1 - var(--zoom) * 2.4, 1);
+}
+
+.plate[data-view='cover'] .register {
+  grid-column: 1;
+  grid-row: 3;
+  max-width: 640px;
+}
+
+.plate[data-view='cover'] h1 {
+  /* As large as the page takes: by its width, and by its height, so that what is under it has room. */
+  font-size: clamp(4.6rem, min(16.4vw, (100vh - 510px) / 1.6), 17.5rem);
+  margin-left: -0.05em;
+}
+
+.plate[data-view='cover'] h1 .word {
+  display: block;
+}
+
+.plate[data-view='cover'] h1 .word + .word {
+  margin-left: 0.3em;
+  margin-top: -0.04em;
+}
+
+.plate[data-view='cover'] h1 .spark {
+  right: -0.1em;
+  top: 0.02em;
+  width: 0.2em;
+  height: 0.2em;
+  transform: rotate(12deg);
+}
+
+.plate[data-view='cover'] .tagline {
+  margin: clamp(18px, 3.6vh, 40px) 0 clamp(14px, 2.6vh, 28px);
+  font-size: clamp(1.15rem, 1.7vw, 1.6rem);
+  max-width: 21em;
+}
+
+.plate[data-view='cover'] .scan {
+  max-width: 600px;
+}
+
+/* The system takes the rest of the page, to its edges. */
+.plate[data-view='cover'] .globe {
+  grid-column: 2;
+  grid-row: 1 / -1;
+  margin: -44px -64px -52px -9vw;
+}
+
+/* A pencil note in the corner of the sky the plate leaves free. */
+.plate[data-view='cover'] .hint {
+  left: auto;
+  right: 6%;
+  top: 13%;
+  bottom: auto;
+  transform: rotate(-4deg);
+}
+
+.plate[data-view='cover'] .masthead > *,
+.plate[data-view='cover'] .register {
+  animation: rise 800ms var(--ease) both;
+}
+
+.plate[data-view='cover'] .masthead > :nth-child(2) {
+  animation-delay: 80ms;
+}
+
+.plate[data-view='cover'] .masthead > :nth-child(3) {
+  animation-delay: 200ms;
+}
+
+.plate[data-view='cover'] .masthead > :nth-child(n + 4) {
+  animation-delay: 300ms;
+}
+
+.plate[data-view='cover'] .register {
+  animation-delay: 400ms;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+/* The title is set, a word at a time. */
+.plate[data-view='cover'] h1 .word {
+  animation: write 1100ms cubic-bezier(0.5, 0, 0.2, 1) 150ms both;
+}
+
+.plate[data-view='cover'] h1 .word + .word {
+  animation-delay: 520ms;
+}
+
+.plate[data-view='cover'] h1 .spark {
+  animation: rise 500ms var(--ease) 1400ms both;
+}
+
+@keyframes write {
+  from {
+    clip-path: inset(-20% 100% -20% -10%);
+    letter-spacing: 0.06em;
+  }
+  to {
+    clip-path: inset(-20% -10% -20% -10%);
+  }
+}
+
+/* ---- the system and a world: the title in a line across the top -------------------------------- */
+
+.plate:is([data-view='system'], [data-view='world'], [data-view='organization']) main {
+  height: 100dvh;
+  padding: 26px 44px 44px 62px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 16px 26px;
+}
+
+.plate:is([data-view='system'], [data-view='world'], [data-view='organization']) .masthead {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  padding-right: 118px;
+  min-width: 0;
+  animation: rise 600ms var(--ease) both;
+}
+
+.plate:is([data-view='system'], [data-view='world'], [data-view='organization']) .eyebrow {
+  display: none;
+}
+
+.plate:is([data-view='system'], [data-view='world'], [data-view='organization']) h1 {
+  font-size: 2.9rem;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  white-space: nowrap;
+  padding-right: 0.42em;
+  flex: none;
+}
+
+.plate:is([data-view='system'], [data-view='world'], [data-view='organization']) h1 .spark {
+  right: 0;
+  top: -0.02em;
+  width: 0.36em;
+  height: 0.36em;
+}
+
+/* There is room for the title, the link and the token: what the atlas is, the cover has said. */
+.plate:is([data-view='system'], [data-view='world'], [data-view='organization']) .tagline {
+  display: none;
+}
+
+.plate:is([data-view='system'], [data-view='world'], [data-view='organization']) .token {
+  flex: none;
+  grid-template-columns: auto 150px;
+  margin-top: 0;
+}
+
+/* Its note is still said to whoever cannot see it. */
+.plate:is([data-view='system'], [data-view='world'], [data-view='organization']) .token #token-hint {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.plate:is([data-view='system'], [data-view='world'], [data-view='organization']) .scan {
+  flex: 1;
+  min-width: 0;
+  max-width: 640px;
+  margin-left: auto;
+}
+
+.plate:is([data-view='system'], [data-view='world'], [data-view='organization']) .error {
+  flex: 1 1 100%;
+  margin-top: 4px;
+}
+
+/* The system: its register to the left, the plate over the rest of the page. */
+.plate[data-view='system'] main {
+  grid-template-columns: clamp(290px, 25vw, 420px) minmax(0, 1fr);
+}
+
+.plate[data-view='system'] .register {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.plate[data-view='system'] .register section {
+  flex: 0 1 auto;
+}
+
+.plate[data-view='system'] .examples {
+  flex: none;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgb(var(--ink-rgb) / 0.16);
+  font-size: 15px;
+}
+
+.plate[data-view='system'] .globe {
+  grid-column: 2;
+  grid-row: 2;
+  margin: 0 -44px -44px -3vw;
+}
+
+.plate[data-view='system'] .hint {
+  left: auto;
+  right: 6%;
+  top: 5%;
+  bottom: auto;
+  transform: rotate(-4deg);
+  font-size: 17px;
+  opacity: clamp(0, 1 - var(--zoom) * 3, 1);
+}
+
+/* A world: its index to the left, its map in the middle, the chosen skill's sheet to the right. */
+.plate:is([data-view='world'], [data-view='organization']) main {
+  grid-template-columns: clamp(270px, 21vw, 380px) minmax(0, 1fr) clamp(400px, 32vw, 580px);
+}
+
+/* The world is larger than the room between the index and the sheet: it runs under the sheet. */
+.plate:is([data-view='world'], [data-view='organization']) .globe {
+  grid-column: 2;
+  grid-row: 2;
+  margin-right: -76px;
+  --under: 76px;
+  --bleed: 1.07;
+}
+
+.plate:is([data-view='world'], [data-view='organization']) .hint {
+  bottom: 24px;
+  font-size: 16px;
+}
+
+.result {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: grid;
+  grid-template-columns: subgrid;
+  min-height: 0;
+  pointer-events: none;
+}
+
+/* What is known of a world comes as the eye does. */
+.result > * {
+  pointer-events: auto;
+  opacity: clamp(0, (var(--zoom) - 0.4) * 2.4, 1);
+}
+
+/* An organization's skills are read over the system: the eye stays where it is, and the plate keeps clear of the sheet. */
+.plate[data-view='organization'] .result > * {
+  opacity: 1;
+}
+
+.plate[data-view='organization'] .globe {
+  margin-right: 0;
+  --under: 0px;
+}
+
+.plate[data-view='organization'] .ledger {
+  transform: none;
+}
+
+:root:not([data-sky='drawn']) :is(.result > *, .register, .masthead, .legend) {
+  opacity: 1;
+  transform: none;
+}
+
+.ledger {
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  transform: translateX(calc((1 - var(--zoom)) * -30px));
+}
+
+@keyframes unfold-left {
+  from {
+    opacity: 0;
+    transform: translateX(-18px);
+  }
+}
+
+/* Back to the system: a pencil note over the world's name. */
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  align-self: flex-start;
+  margin: 0 0 10px -2px;
+  padding: 2px 4px 3px;
+  border: 0;
+  background: none;
+  font: 500 10px/1 var(--mono);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--pencil);
+  cursor: pointer;
+  border-bottom: 1px dashed rgb(var(--ink-rgb) / 0.35);
+}
+
+.back:is(:hover, :focus-visible) {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  outline: none;
+}
+
+/* The repository: its owner in small capitals, its name as a title. */
+.repository {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  line-height: 1;
 }
 
 .repository a {
-  color: inherit;
+  display: grid;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.repository .owner {
+  font: 500 10.5px/1 var(--mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--pencil);
+}
+
+.repository .name {
+  margin-top: 5px;
+  font: italic 320 calc(clamp(38px, 3.5vw, 56px) * max(0.56, var(--fit, 1))) / 0.95 var(--serif);
+  font-variation-settings: 'opsz' 144, 'SOFT' 40, 'WONK' 1;
+  letter-spacing: -0.03em;
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 6px;
+  text-decoration-color: rgb(var(--ink-rgb) / 0.3);
+}
+
+.repository a:hover .name {
+  text-decoration-color: var(--accent);
+}
+
+/* The filter: a field over the index. */
+.filter {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 14px;
+  font-family: var(--mono);
+}
+
+.filter > svg {
+  flex: none;
+}
+
+.filter .drawably-inputbox {
+  flex: 1;
+  display: block;
+  min-width: 0;
+}
+
+.filter input {
+  width: 100%;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.filter input::placeholder {
+  color: rgb(var(--ink-rgb) / 0.42);
+}
+
+.filter + .index {
+  margin-top: 6px;
+}
+
+/* The organizations that were scanned, over the register: each one's skills, a click away. */
+.organizations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  margin-top: 10px;
+}
+
+.organizations button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 500 11.5px/1.6 var(--mono);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgb(var(--ink-rgb) / 0.35);
+}
+
+.organizations button:is(:hover, :focus-visible) {
+  text-decoration-color: var(--accent);
+  outline: none;
+}
+
+/* The worlds most like this one: a step away. */
+.kin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-top: 12px;
+  font: italic 340 14px/1.5 var(--serif);
+  color: var(--pencil);
+}
+
+.kin button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 500 11.5px/1.5 var(--mono);
+  font-style: normal;
+  color: var(--ink);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgb(var(--ink-rgb) / 0.35);
+}
+
+.kin button:is(:hover, :focus-visible) {
+  text-decoration-color: var(--accent);
+  outline: none;
+}
+
+.kin b {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* Notes under the repository. However many, they keep to their corner: the index keeps its room. */
+.warnings {
+  flex: 0 1 auto;
+  min-height: 2.6em;
+  max-height: 30%;
+  margin-top: 10px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--ink-rgb) / 0.3) transparent;
 }
 
 .warning {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  color: #b54708;
-  margin: 4px 0;
-}
-
-.atlas {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) 2fr;
-  gap: 24px;
-  margin-top: 16px;
-  align-items: start;
-}
-
-@media (max-width: 760px) {
-  .atlas {
-    grid-template-columns: 1fr;
-  }
-}
-
-nav[aria-label='Skills'] h3 {
-  margin: 16px 0 4px;
-  font-size: 20px;
-}
-
-nav[aria-label='Skills'] section:first-child h3 {
-  margin-top: 0;
-}
-
-nav[aria-label='Skills'] h3 a {
-  color: inherit;
-}
-
-nav[aria-label='Skills'] ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-nav[aria-label='Skills'] button {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  text-align: left;
-  border: 0;
-  border-left: 3px solid transparent;
-  background: none;
-  padding: 8px 12px;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-}
-
-nav[aria-label='Skills'] button:hover {
-  background: #f1efe7;
-}
-
-nav[aria-label='Skills'] button[aria-current='true'] {
-  border-left-color: #1f3a8a;
-  background: #eef2ff;
-}
-
-nav[aria-label='Skills'] button span {
-  color: #57534e;
-  font-size: 14px;
-}
-
-nav[aria-label='Skills'] button code {
-  color: #78716c;
-  font-size: 12px;
+  margin: 0 0 8px;
+  font: italic 380 13.5px/1.4 var(--serif);
+  color: var(--warn);
   overflow-wrap: anywhere;
 }
 
+.warning svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.void {
+  margin: 18px 0 0;
+  font: italic 340 19px/1.35 var(--serif);
+  color: var(--pencil);
+  max-width: 17em;
+}
+
+/* The chosen skill's sheet: lying on the atlas, over the edge of the world, its SKILL.md as scanned. */
 .skill {
-  padding: 20px 24px;
+  grid-column: 3;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   min-width: 0;
+  padding: 26px 28px 22px;
+  background: var(--sheet);
+  border-radius: 3px;
+  box-shadow:
+    0 1px 0 rgb(var(--shade) / 0.05),
+    0 22px 44px -20px rgb(var(--shade) / 0.42),
+    0 3px 10px -4px rgb(var(--shade) / 0.2);
+  transform-origin: 0 50%;
+  animation: turn-page 760ms var(--ease) both;
+}
+
+@keyframes turn-page {
+  from {
+    transform: perspective(1400px) rotateY(-34deg) translateX(26px);
+  }
+  to {
+    transform: perspective(1400px) rotateY(0deg);
+  }
+}
+
+/* Only the SKILL.md gives way when the sheet is short of room. */
+.skill > :not(pre) {
+  flex-shrink: 0;
+}
+
+/* A strip of tape holds it down. */
+.skill::after {
+  content: '';
+  position: absolute;
+  top: -11px;
+  left: 50%;
+  width: 104px;
+  height: 24px;
+  transform: translateX(-50%) rotate(-2.2deg);
+  background: color-mix(in srgb, var(--marker) 58%, transparent);
+  clip-path: polygon(0 0, 3% 22%, 0 44%, 3% 66%, 0 100%, 100% 100%, 97% 78%, 100% 56%, 97% 34%, 100% 0);
+  box-shadow: 0 1px 2px rgb(var(--shade) / 0.15);
+}
+
+.skill .size {
+  position: absolute;
+  top: 20px;
+  right: 26px;
+  margin: 0;
+  font: 500 10px/1 var(--mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--pencil);
 }
 
 .skill h3 {
-  margin: 0 0 8px;
-  font-size: 26px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  font-family: var(--pen);
+  /* A long name is written smaller, so it keeps to a line or two. */
+  font-size: calc(clamp(32px, 2.9vw, 46px) * max(0.6, var(--fit, 1)));
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.skill h3 svg {
+  flex: none;
+}
+
+.skill .description {
+  margin: 12px 0 0;
+  font: italic 360 16.5px/1.42 var(--serif);
+  font-variation-settings: 'SOFT' 100;
+  max-height: 8.52em;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .skill .links {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  font-size: 14px;
-  color: #57534e;
+  gap: 4px 14px;
+  margin: 12px 0 0;
+  font: 400 11.5px/1.5 var(--mono);
+  color: var(--pencil);
 }
 
 .skill .links a {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  color: #1f3a8a;
+  gap: 5px;
+  color: var(--ink);
+  text-underline-offset: 3px;
+  text-decoration-color: rgb(var(--ink-rgb) / 0.4);
   overflow-wrap: anywhere;
 }
 
+.skill .links a:hover {
+  text-decoration-color: var(--accent);
+}
+
+.skill .links span {
+  overflow-wrap: anywhere;
+}
+
+/* A notebook page: numbered lines, a red rule down the margin. */
 .skill pre {
-  margin: 16px 0 0;
-  padding: 16px;
-  background: #f5f3ec;
-  border-radius: 6px;
+  position: relative;
+  flex: 1;
+  min-height: 120px;
+  margin: 16px -10px 0;
+  padding: 12px 12px 14px 0;
   overflow: auto;
-  max-height: 70vh;
-  font-size: 13px;
-  line-height: 1.5;
+  counter-reset: line;
+  font: 400 12.5px/1.72 var(--mono);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  tab-size: 2;
+  color: var(--ink);
+  background:
+    linear-gradient(to right, transparent 43px, color-mix(in srgb, var(--accent) 55%, transparent) 43px 44px, transparent 44px),
+    repeating-linear-gradient(to bottom, transparent 0 calc(1.72em - 1px), rgb(var(--ink-rgb) / 0.09) calc(1.72em - 1px) 1.72em) 0 12px;
+  background-attachment: local;
+  border-top: 1px solid rgb(var(--ink-rgb) / 0.16);
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--ink-rgb) / 0.3) transparent;
+  outline: none;
+}
+
+.skill pre:focus-visible {
+  box-shadow: inset 0 0 0 1.5px rgb(var(--ink-rgb) / 0.5);
+}
+
+.skill pre .line {
+  display: block;
+  position: relative;
+  padding-left: 56px;
+  counter-increment: line;
+}
+
+.skill pre .line::before {
+  content: counter(line);
+  position: absolute;
+  left: 0;
+  width: 36px;
+  text-align: right;
+  font-size: 10px;
+  color: var(--pencil);
+  opacity: 0.75;
+  user-select: none;
+}
+
+.skill pre .matter {
+  background: linear-gradient(to right, transparent 50px, color-mix(in srgb, var(--marker) 30%, transparent) 50px);
+  color: rgb(var(--ink-rgb) / 0.86);
+}
+
+.skill pre .matter b {
+  font-weight: 700;
+}
+
+.skill pre .heading {
+  font-weight: 700;
+}
+
+.skill pre .fence {
+  color: rgb(var(--ink-rgb) / 0.72);
+}
+
+/* The marker wash is light on a dark page. */
+.drawably-svg .drawably-wash {
+  mix-blend-mode: var(--wash-blend);
+}
+
+h1 .drawably-wash {
+  stroke-opacity: 0.55;
+}
+
+/* ---- narrower pages: the sky above, what is written below -------------------------------------- */
+
+@media (max-width: 1100px) {
+  .plate:is([data-view='system'], [data-view='world'], [data-view='organization']) main {
+    height: auto;
+    padding: 26px 34px 60px 52px;
+  }
+
+  .plate:is([data-view='world'], [data-view='organization']) main {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    grid-template-rows: auto min(54vh, 460px) auto;
+  }
+
+  .plate[data-view='system'] main {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto min(62vh, 560px) auto;
+  }
+
+  .plate:is([data-view='system'], [data-view='world'], [data-view='organization']) .tagline {
+    display: none;
+  }
+
+  /* The page scrolls here: nothing is written in the margin, over what scrolls past. */
+  .margin {
+    display: none;
+  }
+
+  .plate:is([data-view='world'], [data-view='organization']) .globe {
+    grid-column: 1 / -1;
+    margin-right: 0;
+    --under: 0px;
+    --bleed: 0.94;
+  }
+
+  .plate[data-view='system'] .globe {
+    grid-column: 1;
+    grid-row: 2;
+    margin: 0 -34px 0 -52px;
+  }
+
+  .plate[data-view='system'] .register {
+    grid-row: 3;
+  }
+
+  .result {
+    grid-row: 3;
+    grid-template-columns: subgrid;
+  }
+
+  .ledger {
+    transform: none;
+  }
+
+  .skill {
+    grid-column: 2;
+    align-self: start;
+    position: sticky;
+    top: 24px;
+    max-height: calc(100dvh - 48px);
+  }
+
+  .index > :is(ul, .entries) {
+    overflow: visible;
+    mask-image: none;
+  }
+
+  .warnings {
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 860px) {
+  main,
+  .plate:is([data-view='system'], [data-view='world'], [data-view='organization']) main {
+    padding: 64px 26px 56px 30px;
+  }
+
+  .plate[data-view='cover'] main {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    align-content: start;
+    row-gap: 8px;
+  }
+
+  .plate[data-view='cover'] :is(.masthead, .register) {
+    grid-row: auto;
+  }
+
+  .plate[data-view='cover'] h1 {
+    font-size: clamp(5rem, 29vw, 10rem);
+  }
+
+  .plate[data-view='cover'] .globe {
+    grid-column: 1;
+    grid-row: auto;
+    min-height: min(96vw, 560px);
+    margin: 12px -26px 0 -30px;
+  }
+
+  .plate:is([data-view='world'], [data-view='organization']) main {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto min(88vw, 440px) auto;
+  }
+
+  .plate[data-view='system'] .globe {
+    margin: 0 -26px 0 -30px;
+  }
+
+  .plate:is([data-view='system'], [data-view='world'], [data-view='organization']) .masthead {
+    padding-right: 0;
+    gap: 14px;
+  }
+
+  .plate:is([data-view='system'], [data-view='world'], [data-view='organization']) .scan {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+
+  .legend span:not(.turn) {
+    display: none;
+  }
+
+  .legend .turn {
+    margin-left: 12px;
+  }
+
+  .result {
+    row-gap: 30px;
+  }
+
+  .skill {
+    grid-column: 1;
+    position: relative;
+    top: 0;
+    max-height: none;
+  }
+
+  .skill pre {
+    max-height: 70vh;
+  }
+
+  .neatline {
+    inset: 7px;
+  }
+
+  .exposure {
+    top: 22px;
+    right: 24px;
+  }
+
+  .note {
+    font-size: 19px;
+    top: 2%;
+  }
+
+  .scan {
+    flex-wrap: wrap;
+  }
+
+  .scan > svg {
+    display: none;
+  }
+
+  .scan .drawably-inputbox {
+    flex: 1 1 220px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }
