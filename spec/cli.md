@@ -1,5 +1,5 @@
 # Command line
-`./skill-atlas scan <GitHub URL | directory> [--filter <words>]`; a `/tree/<ref>` URL pins a
+`./skill-atlas scan <GitHub URL | directory> [--filter <words>] [--group]`; a `/tree/<ref>` URL pins a
 commit; `github.com/<owner>` scans all of an organization's repositories
 Prints the result **at once**; *nothing is stored*.
 ## GitHub token
@@ -29,3 +29,18 @@ JetBrains/kotlin · 6 skills
 ```
 - Repositories by id, a blank line before each; each as a repository scan prints it
 - With `--filter`: `M of N skills in R repositories`, only the repositories with a match
+## Themes
+```
+JetBrains/atlas-themes · 7 skills
+
+gradle · 2 skills
+gradle-build — Build the project with Gradle.
+  https://github.com/JetBrains/atlas-themes/blob/<commit>/…
+…
+
+Other · 1 skill
+…
+```
+- `--group`: the shown skills by theme (`spec/analysis.md`, "Themes"), each group after a blank
+  line, under `<title> · N skills`; with `--filter`, of the skills it leaves
+- An organization: the header line, then the groups, across its repositories

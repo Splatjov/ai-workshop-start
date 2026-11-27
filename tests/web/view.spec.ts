@@ -371,3 +371,94 @@ test('a token GitHub rejects, the rate limit without one → alerts that name th
   await expect(page.getByRole('alert')).toHaveText('error GitHub rejected the token in the GitHub token field');
   await expect(page.getByRole('alert')).not.toContainText('GITHUB_TOKEN');
 });
+
+const groupSwitch = (page: Page) => page.getByRole('switch', { name: 'Group by theme' });
+const groupTitles = (page: Page) => page.getByRole('navigation', { name: 'Skills' }).getByRole('heading', { level: 3 });
+
+test('group by theme: a switch, off at first; on, the skills under their themes; the chosen one stays', async ({ page }) => {
+  await page.goto('./');
+  await scan(page, 'https://github.com/JetBrains/atlas-themes');
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/atlas-themes 7 skills');
+  await expect(groupSwitch(page)).not.toBeChecked();
+  await expect(groupTitles(page)).toHaveCount(0);
+  await skillButtons(page).filter({ hasText: 'pdf-read' }).click();
+  const scanned = requests.length;
+
+  await groupSwitch(page).check();
+  await expect(groupTitles(page)).toHaveText(['gradle · 2 skills', 'pdf · 2 skills', 'test · unit · 2 skills', 'Other · 1 skill']);
+  const nav = page.getByRole('navigation', { name: 'Skills' });
+  await expect(nav.getByRole('region', { name: 'test · unit' }).getByRole('button')).toHaveText([/^junit-test/, /^kotlin-test/]);
+  await expect(nav.getByRole('region', { name: 'Other' }).getByRole('button')).toHaveText([
+    'commitsWrite commit messages the way this repository does..claude/skills/commits/SKILL.md',
+  ]);
+  await expect(chosen(page)).toHaveAccessibleName('pdf-read: SKILL.md');
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/atlas-themes 7 skills');
+
+  // Not in the address, not stored; off again: the list as before.
+  expect(new URL(page.url()).search).toBe(`?repo=${encodeURIComponent('https://github.com/JetBrains/atlas-themes')}`);
+  expect(await page.evaluate('JSON.stringify([{ ...localStorage }, { ...sessionStorage }, document.cookie])')).toBe('[{},{},""]');
+  await groupSwitch(page).uncheck();
+  await expect(groupTitles(page)).toHaveCount(0);
+  await expect(skillButtons(page)).toHaveText([/^commits/, /^gradle-build/, /^gradle-publish/, /^junit-test/, /^kotlin-test/, /^pdf-fill/, /^pdf-read/]);
+  await expect(chosen(page)).toHaveAccessibleName('pdf-read: SKILL.md');
+  expect(requests.length, 'grouping does not scan').toBe(scanned);
+});
+
+test('group by theme with the filter: the groups of the skills it leaves; it stays on for the next scan, the filter does not', async ({ page }) => {
+  await page.goto('./');
+  await scan(page, 'https://github.com/JetBrains/atlas-themes');
+  await groupSwitch(page).check();
+  await expect(chosen(page)).toHaveAccessibleName('gradle-build: SKILL.md'); // the first one shown
+  await skillButtons(page).filter({ hasText: 'commits' }).click();
+  // The chosen skill, commits, does not match: the first one shown is chosen.
+  await filterField(page).fill('with');
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/atlas-themes 4 of 7 skills');
+  await expect(groupTitles(page)).toHaveText(['gradle · 2 skills', 'test · unit · 2 skills']);
+  await expect(chosen(page)).toHaveAccessibleName('gradle-build: SKILL.md');
+  await filterField(page).fill('no-such-skill');
+  await expect(page.getByRole('status')).toHaveText('No skill matches “no-such-skill”.');
+  await expect(groupTitles(page)).toHaveCount(0);
+
+  await scan(page, 'https://github.com/JetBrains/atlas-demo');
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/atlas-demo 3 skills');
+  await expect(filterField(page)).toHaveValue('');
+  await expect(groupSwitch(page)).toBeChecked();
+  await expect(groupTitles(page)).toHaveText(['Other · 3 skills']);
+  await expect(chosen(page)).toHaveAccessibleName('code-style: SKILL.md');
+});
+
+test('group by theme, an organization: the themes across its repositories, each path after its owner/repo', async ({ page }) => {
+  await page.goto('./');
+  await scan(page, 'https://github.com/themes-org');
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('themes-org 4 skills in 2 repositories');
+  await expect(groupTitles(page)).toHaveText(['themes-org/build', 'themes-org/docs']);
+
+  await groupSwitch(page).check();
+  await expect(groupTitles(page)).toHaveText(['gradle · 2 skills', 'Other · 2 skills']);
+  await expect(page.getByRole('navigation', { name: 'Skills' }).getByRole('region', { name: 'gradle' }).getByRole('button')).toHaveText([
+    'gradle-buildBuild the project with Gradle.themes-org/build/.claude/skills/gradle-build/SKILL.md',
+    'gradle-publishPublish to Maven Central with Gradle.themes-org/docs/.claude/skills/gradle-publish/SKILL.md',
+  ]);
+  await expect(chosen(page)).toHaveAccessibleName('gradle-build: SKILL.md');
+  await skillButtons(page).filter({ hasText: 'gradle-publish' }).click();
+  await expect(chosen(page).getByRole('link')).toHaveAttribute(
+    'href',
+    `https://github.com/themes-org/docs/blob/${COMMIT}/.claude/skills/gradle-publish/SKILL.md`,
+  );
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('themes-org 4 skills in 2 repositories');
+});
+
+test('group by theme: a scan started while another runs wins, grouped', async ({ page }) => {
+  await page.goto('./');
+  await scan(page, 'https://github.com/JetBrains/atlas-themes');
+  await groupSwitch(page).check();
+  const releaseDemo = slow('JetBrains/atlas-demo');
+  await scan(page, 'https://github.com/JetBrains/atlas-demo');
+  await page.getByRole('navigation', { name: 'Examples' }).getByRole('link', { name: 'JetBrains/koog' }).click();
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/koog 1 skill');
+  releaseDemo();
+  await expect.poll(() => answered.filter((url) => url.includes('/atlas-demo/') && url.endsWith('SKILL.md')).length).toBe(4);
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/koog 1 skill');
+  await expect(groupTitles(page)).toHaveText(['Other · 1 skill']);
+  await expect(groupSwitch(page)).toBeChecked();
+});

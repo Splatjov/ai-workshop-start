@@ -8,10 +8,12 @@ import {
   DrawablyCard,
   DrawablyHighlight,
   DrawablyInput,
+  DrawablyToggle,
 } from 'drawably/react';
 import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from 'react';
 import type { RepositoryView, ScanOptions, ScanView, SkillView } from '../src/browser.ts';
 import { filterSkills } from '../src/core/model.ts';
+import { groupByTheme } from '../src/core/themes.ts';
 
 export type Backend = { scan(input: string, options?: ScanOptions): Promise<ScanView> };
 
@@ -40,6 +42,8 @@ export function App({ backend }: { backend: Backend }) {
   // Kept in the page's memory only: not in the address, not in storage.
   const [token, setToken] = useState('');
   const [filter, setFilter] = useState('');
+  // Kept for the next scan too; not in the address, not stored.
+  const [grouped, setGrouped] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [view, setView] = useState<ScanView>();
   const [selected, setSelected] = useState<string>();
@@ -160,7 +164,15 @@ export function App({ backend }: { backend: Backend }) {
       )}
 
       {view && !('error' in view) && (
-        <Result view={view} filter={filter} onFilter={setFilter} selected={selected} onSelect={setSelected} />
+        <Result
+          view={view}
+          filter={filter}
+          onFilter={setFilter}
+          grouped={grouped}
+          onGroup={setGrouped}
+          selected={selected}
+          onSelect={setSelected}
+        />
       )}
     </main>
   );
@@ -172,12 +184,16 @@ function Result({
   view,
   filter,
   onFilter,
+  grouped,
+  onGroup,
   selected,
   onSelect,
 }: {
   view: Exclude<ScanView, { error: string }>;
   filter: string;
   onFilter(filter: string): void;
+  grouped: boolean;
+  onGroup(grouped: boolean): void;
   selected?: string;
   onSelect(id: string): void;
 }) {
@@ -189,8 +205,13 @@ function Result({
     .map((repository) => ({ ...repository, skills: filterSkills(repository.skills, filter) }))
     .filter((repository) => repository.skills.length > 0);
   const skills = shown.flatMap((repository) => repository.skills);
+  // The skills as listed: under their themes, or under their repositories.
+  const groups = grouped
+    ? groupByTheme(skills).map(({ title, skills }) => ({ key: title, title, skills, repository: undefined }))
+    : shown.map(({ repository, skills }) => ({ key: repository.id, title: undefined, skills, repository }));
+  const listed = groups.flatMap((group) => group.skills);
   // The chosen skill, or else the first one shown.
-  const chosen = skills.find((skill) => skill.id === selected) ?? skills[0];
+  const chosen = listed.find((skill) => skill.id === selected) ?? listed[0];
   const count = skills.length === all.length ? `${all.length}` : `${skills.length} of ${all.length}`;
   return (
     <section aria-label="Scan result">
@@ -233,6 +254,9 @@ function Result({
             autoComplete="off"
             spellCheck={false}
           />
+          <label className="group">
+            <DrawablyToggle checked={grouped} onChange={(event) => onGroup(event.target.checked)} /> Group by theme
+          </label>
         </div>
       )}
 
@@ -245,9 +269,14 @@ function Result({
       {skills.length > 0 && (
         <div className="atlas">
           <nav aria-label="Skills">
-            {shown.map(({ repository, skills }) => (
-              <section key={repository.id} aria-label={organization && repository.id}>
-                {organization && (
+            {groups.map(({ key, title, skills, repository }) => (
+              <section key={key} aria-label={title ?? (organization && repository.id)}>
+                {title !== undefined && (
+                  <h3>
+                    {title} <small>· {plural(skills.length, 'skill', 'skills')}</small>
+                  </h3>
+                )}
+                {organization && repository && (
                   <h3>
                     <a href={`${repository.url}/tree/${repository.commit}`} target="_blank" rel="noreferrer">
                       {repository.id}
@@ -264,7 +293,7 @@ function Result({
                       >
                         <strong>{skill.name}</strong>
                         {skill.description && <span>{firstSentence(skill.description)}</span>}
-                        <code>{skill.path}</code>
+                        <code>{organization && grouped ? `${skill.repository}/${skill.path}` : skill.path}</code>
                       </button>
                     </li>
                   ))}

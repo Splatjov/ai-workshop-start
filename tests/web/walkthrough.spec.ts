@@ -112,3 +112,23 @@ test('an organization: its skills under their repositories; a link that cannot b
     await screenshot(page, 'error');
   });
 });
+
+test('themes: the skills grouped by theme, with the filter', async ({ page }) => {
+  const titles = page.getByRole('navigation', { name: 'Skills' }).getByRole('heading', { level: 3 });
+
+  await test.step('scan JetBrains/atlas-themes, switch on "Group by theme": 3 themes, then Other', async () => {
+    await page.goto('./');
+    await scan(page, 'https://github.com/JetBrains/atlas-themes');
+    await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/atlas-themes 7 skills');
+    await page.getByRole('switch', { name: 'Group by theme' }).check();
+    await expect(titles).toHaveText(['gradle · 2 skills', 'pdf · 2 skills', 'test · unit · 2 skills', 'Other · 1 skill']);
+    await expect(chosen(page)).toHaveAccessibleName('gradle-build: SKILL.md');
+    await screenshot(page, 'themes');
+  });
+
+  await test.step('filter "test": one theme left', async () => {
+    await page.getByLabel('Filter skills').fill('test');
+    await expect(titles).toHaveText(['test · unit · 2 skills']);
+    await expect(skills(page)).toHaveCount(2);
+  });
+});

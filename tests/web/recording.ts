@@ -50,7 +50,47 @@ export const ATLAS_ORG = {
   'atlas-org/empty': {},
 };
 
+/** Skills that share words, for the themes (spec/analysis.md, "Themes"): name → description. */
+export const THEMES: Record<string, string> = {
+  'gradle-build': 'Build the project with Gradle.',
+  'gradle-publish': 'Publish to Maven Central with Gradle.',
+  'pdf-read': 'Read the text of a PDF.',
+  'pdf-fill': 'Fill in the fields of a PDF form.',
+  'kotlin-test': 'Kotlin unit tests, with kotlin.test.',
+  'junit-test': 'Run the unit tests with JUnit.',
+};
+export const themeMd = (name: string) => `---\nname: ${name}\ndescription: ${THEMES[name]}\n---\n# ${name}\n`;
+const themePath = (name: string) => `.claude/skills/${name}/SKILL.md`;
+const themeFiles = (repository: string, commit: string, names: string[]) =>
+  Object.fromEntries(names.map((name) => [`${RAW}/${repository}/${commit}/${themePath(name)}`, ok(themeMd(name))]));
+
+/** themes-org's repositories: each one's skills. */
+const THEMES_ORG = { 'themes-org/build': ['gradle-build', 'kotlin-test'], 'themes-org/docs': ['gradle-publish', 'pdf-read'] };
+
 export const RECORDING: Recording = {
+  // JetBrains/atlas-themes: skills that share words, and one that shares none.
+  [`${API}/JetBrains/atlas-themes`]: ok({ full_name: 'JetBrains/atlas-themes', default_branch: 'main' }),
+  [`${API}/JetBrains/atlas-themes/commits/main`]: ok({ sha: COMMIT }),
+  [`${API}/JetBrains/atlas-themes/git/trees/${COMMIT}?recursive=1`]: ok({
+    truncated: false,
+    tree: [...Object.keys(THEMES), 'commits'].map((name) => blob(themePath(name))),
+  }),
+  ...themeFiles('JetBrains/atlas-themes', COMMIT, Object.keys(THEMES)),
+  [`${RAW}/JetBrains/atlas-themes/${COMMIT}/${themePath('commits')}`]: ok(COMMITS_MD),
+
+  // themes-org: two repositories, a theme across them.
+  [`${GITHUB}/users/themes-org`]: ok({ login: 'themes-org', public_repos: 2 }),
+  [`${GITHUB}/users/themes-org/repos?per_page=100&page=1`]: ok(
+    Object.keys(THEMES_ORG).map((full_name) => ({ full_name, default_branch: 'main', fork: false })),
+  ),
+  ...Object.fromEntries(
+    Object.entries(THEMES_ORG).flatMap(([repository, names]) => [
+      [`${API}/${repository}/git/trees/main?recursive=1`, ok({ sha: COMMIT, truncated: false, tree: names.map((name) => blob(themePath(name))) })],
+      [`${API}/${repository}/commits/main`, ok({ sha: COMMIT, commit: { tree: { sha: `${repository}-tree` } } })],
+      ...Object.entries(themeFiles(repository, COMMIT, names)),
+    ]),
+  ),
+
   // JetBrains/atlas-demo: a skill and its copy, one more, and one with malformed front matter.
   [`${API}/JetBrains/atlas-demo`]: ok({ full_name: 'JetBrains/atlas-demo', default_branch: 'main' }),
   [`${API}/JetBrains/atlas-demo/commits/main`]: ok({ sha: COMMIT }),
