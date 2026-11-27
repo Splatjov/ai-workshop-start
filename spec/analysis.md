@@ -12,6 +12,23 @@ Every `SKILL.md`: **name**, **description**, **link**
 Words, to show only some of the scanned commit's skills: a skill matches when *every word* is in
 its name, description or path, in any case. No words → every skill. The scan is the same; only
 what is shown differs
+## Themes
+To group skills by what they are about, from the words they share: offline, no key, the same
+groups on every run. Over the skills the filter leaves; an organization's across its repositories
+- A skill's **words**: its name and description, in lower case, split at anything but a letter or
+  a digit; then without words of under 3 characters, numbers, and common words (`the`, `with`,
+  `use`, `skill`, …: the list in `src/core/themes.ts`); a final `s` dropped, not of `ss`,
+  `is` or `us` (`tests` → `test`; `class`, `analysis`, `status` stay); a word that is then
+  under 3 characters or a common word is dropped too (`PRs`, `IDs`, `ways`), as `PR`, `ID` and
+  `way` are
+- A **theme word**: a word of 2 skills or more, but of at most half of them (rounded down) when
+  that is more than 2: a word nearly every skill has is no theme
+- **Groups**, one at a time: the theme word that most of the skills not yet grouped have (a tie →
+  the first alphabetically) takes all of them. Again, while a theme word is shared by 2 of them or
+  more. The skills left: `Other`
+- A group's **title**: its word, then up to 2 more theme words all its skills have,
+  alphabetically, joined by ` · `: `test · unit`
+- Groups in the order they were made, `Other` last; in a group, the skills by name
 ## Organization
 - The same scan, for each repository; the result lists the repositories *that have skills*, by id
 - **Few requests**: the repository list, 100 a page, the pages asked for together; then
@@ -64,3 +81,4 @@ Real repositories, each pinned to a commit: `npm run test:e2e`, in CI too
 - `JetBrains/koog` at `709079e`: 4 skills, two deep in test resources
 - `JetBrains/android` at `294d4c0`: a tree too large for one answer → `0 skills` and a warning,
   under 10 s
+- `JetBrains/koog` at `709079e`, scanned twice: the same output, the second from the CLI's cache

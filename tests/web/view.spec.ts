@@ -1,5 +1,5 @@
 // spec/web.md: the page, as a user sees it, over recorded GitHub answers.
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { chosen, filterField, recorded, scan, skillButtons, type Recorded } from './github.ts';
 import { placesInView } from './in-page.js';
 import { BROKEN_MD, COMMIT, COMMITS_MD, GAMMA_COMMIT, GRADLE_MD, MANY_BIG_MD, MANY_ONE_LINE_MD, STYLE_MD } from './recording.ts';
@@ -406,4 +406,142 @@ test('a token GitHub rejects, the rate limit without one → alerts that name th
   await scan(page, 'https://github.com/JetBrains/koog');
   await expect(page.getByRole('alert')).toHaveText('error GitHub rejected the token in the GitHub token field');
   await expect(page.getByRole('alert')).not.toContainText('GITHUB_TOKEN');
+});
+
+const groupSwitch = (page: Page) => page.getByRole('switch', { name: 'Group by theme' });
+const groupTitles = (page: Page) => page.getByRole('navigation', { name: 'Skills' }).getByRole('heading', { level: 3 });
+
+test('group by theme: a switch, off at first; on, the skills under their themes; the chosen one stays', async ({ page }) => {
+  await page.goto('./');
+  await scan(page, 'https://github.com/JetBrains/atlas-themes');
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/atlas-themes 7 skills');
+  await expect(groupSwitch(page)).not.toBeChecked();
+  await expect(groupTitles(page)).toHaveCount(0);
+  await skillButtons(page).filter({ hasText: 'pdf-read' }).click();
+  const scanned = requests.length;
+
+  await groupSwitch(page).check();
+  await expect(groupTitles(page)).toHaveText(['gradle · 2 skills', 'pdf · 2 skills', 'test · unit · 2 skills', 'Other · 1 skill']);
+  const nav = page.getByRole('navigation', { name: 'Skills' });
+  await expect(nav.getByRole('region', { name: 'test · unit' }).getByRole('button')).toHaveText([/^junit-test/, /^kotlin-test/]);
+  await expect(nav.getByRole('region', { name: 'Other' }).getByRole('button')).toHaveText([
+    'commitsWrite commit messages the way this repository does..claude/skills/commits/SKILL.md',
+  ]);
+  await expect(chosen(page)).toHaveAccessibleName('pdf-read: SKILL.md');
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/atlas-themes 7 skills');
+
+  // Not in the address, not stored; off again: the list as before.
+  expect(new URL(page.url()).search).toBe(`?repo=${encodeURIComponent('https://github.com/JetBrains/atlas-themes')}`);
+  expect(await page.evaluate('JSON.stringify([{ ...localStorage }, { ...sessionStorage }, document.cookie])')).toBe('[{},{},""]');
+  await groupSwitch(page).uncheck();
+  await expect(groupTitles(page)).toHaveCount(0);
+  await expect(skillButtons(page)).toHaveText([/^commits/, /^gradle-build/, /^gradle-publish/, /^junit-test/, /^kotlin-test/, /^pdf-fill/, /^pdf-read/]);
+  await expect(chosen(page)).toHaveAccessibleName('pdf-read: SKILL.md');
+  expect(requests.length, 'grouping does not scan').toBe(scanned);
+});
+
+test('group by theme on a phone: the switch goes under the filter, which keeps the whole row', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto('./');
+  await scan(page, 'https://github.com/JetBrains/atlas-themes');
+  await expect(groupSwitch(page)).toBeVisible();
+  const row = (await page.locator('.filter').boundingBox())!;
+  const field = (await filterField(page).boundingBox())!;
+  const label = (await page.locator('.filter .group').boundingBox())!;
+  expect(field.width, 'the filter field has the row, after its icon').toBeGreaterThan(row.width - 40);
+  expect(label.y, 'the switch is under the field').toBeGreaterThanOrEqual(field.y + field.height);
+  expect(await page.evaluate('document.documentElement.scrollWidth'), 'no sideways scrolling').toBeLessThanOrEqual(390);
+  // Where the index has the width of the page, they share one row.
+  await page.setViewportSize({ width: 1000, height: 720 });
+  const wide = (await filterField(page).boundingBox())!;
+  const beside = (await page.locator('.filter .group').boundingBox())!;
+  expect(beside.x, 'the switch is next to the field').toBeGreaterThanOrEqual(wide.x + wide.width);
+  expect(beside.y).toBeLessThan(wide.y + wide.height);
+  // Beside a world's map the index is a column, narrower than a phone: under the field again.
+  await page.setViewportSize({ width: 1280, height: 720 });
+  const column = (await page.locator('.filter').boundingBox())!;
+  const narrow = (await filterField(page).boundingBox())!;
+  const under = (await page.locator('.filter .group').boundingBox())!;
+  expect(narrow.width, 'the filter field has the row, after its icon').toBeGreaterThan(column.width - 40);
+  expect(under.y, 'the switch is under the field').toBeGreaterThanOrEqual(narrow.y + narrow.height);
+  expect(under.x + under.width, 'the switch stays in the index').toBeLessThanOrEqual(column.x + column.width);
+});
+
+test('group by theme with the filter: the groups of the skills it leaves; it stays on for the next scan, the filter does not', async ({ page }) => {
+  await page.goto('./');
+  await scan(page, 'https://github.com/JetBrains/atlas-themes');
+  await groupSwitch(page).check();
+  await expect(chosen(page)).toHaveAccessibleName('gradle-build: SKILL.md'); // the first one shown
+  await skillButtons(page).filter({ hasText: 'commits' }).click();
+  // The chosen skill, commits, does not match: the first one shown is chosen.
+  await filterField(page).fill('with');
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/atlas-themes 4 of 7 skills');
+  await expect(groupTitles(page)).toHaveText(['gradle · 2 skills', 'test · unit · 2 skills']);
+  await expect(chosen(page)).toHaveAccessibleName('gradle-build: SKILL.md');
+  await filterField(page).fill('no-such-skill');
+  await expect(page.getByRole('status')).toHaveText('No skill matches “no-such-skill”.');
+  await expect(groupTitles(page)).toHaveCount(0);
+
+  await scan(page, 'https://github.com/JetBrains/atlas-demo');
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/atlas-demo 3 skills');
+  await expect(filterField(page)).toHaveValue('');
+  await expect(groupSwitch(page)).toBeChecked();
+  await expect(groupTitles(page)).toHaveText(['Other · 3 skills']);
+  await expect(chosen(page)).toHaveAccessibleName('code-style: SKILL.md');
+});
+
+test('group by theme, an organization: the themes across its repositories, each path after its owner/repo', async ({ page }) => {
+  await page.goto('./');
+  await scan(page, 'https://github.com/themes-org');
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('themes-org 4 skills in 2 repositories');
+  await expect(groupTitles(page)).toHaveText(['themes-org/build', 'themes-org/docs']);
+
+  await groupSwitch(page).check();
+  await expect(groupTitles(page)).toHaveText(['gradle · 2 skills', 'Other · 2 skills']);
+  await expect(page.getByRole('navigation', { name: 'Skills' }).getByRole('region', { name: 'gradle' }).getByRole('button')).toHaveText([
+    'gradle-buildBuild the project with Gradle.themes-org/build/.claude/skills/gradle-build/SKILL.md',
+    'gradle-publishPublish to Maven Central with Gradle.themes-org/docs/.claude/skills/gradle-publish/SKILL.md',
+  ]);
+  await expect(chosen(page)).toHaveAccessibleName('gradle-build: SKILL.md');
+  await skillButtons(page).filter({ hasText: 'gradle-publish' }).click();
+  await expect(chosen(page).getByRole('link')).toHaveAttribute(
+    'href',
+    `https://github.com/themes-org/docs/blob/${COMMIT}/.claude/skills/gradle-publish/SKILL.md`,
+  );
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('themes-org 4 skills in 2 repositories');
+});
+
+test('group by theme: a scan started while another runs wins, grouped', async ({ page }) => {
+  await page.goto('./');
+  await scan(page, 'https://github.com/JetBrains/atlas-themes');
+  await groupSwitch(page).check();
+  const releaseDemo = slow('JetBrains/atlas-demo');
+  await scan(page, 'https://github.com/JetBrains/atlas-demo');
+  await page.getByRole('navigation', { name: 'Examples' }).getByRole('link', { name: 'JetBrains/koog' }).click();
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/koog 1 skill');
+  releaseDemo();
+  await expect.poll(() => answered.filter((url) => url.includes('/atlas-demo/') && url.endsWith('SKILL.md')).length).toBe(4);
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('JetBrains/koog 1 skill');
+  await expect(groupTitles(page)).toHaveText(['Other · 1 skill']);
+  await expect(groupSwitch(page)).toBeChecked();
+});
+
+test('group by theme, on the world: the places stay as they are; ↓ and ↑ follow the index as listed', async ({ page }) => {
+  await page.goto('./');
+  await scan(page, 'https://github.com/JetBrains/atlas-themes');
+  await expect(page.locator('[data-place]')).toHaveCount(7);
+  const places = await page.locator('[data-place]').allTextContents();
+
+  await groupSwitch(page).check();
+  await expect(groupTitles(page)).toHaveCount(4);
+  await expect(page.locator('[data-place]')).toHaveText(places);
+  await expect(page.locator('[data-place][data-chosen]')).toHaveText('gradle-build'); // the first one listed
+
+  // gradle-publish ends its theme: the next one listed is pdf-fill, of the next theme (by name, it is junit-test).
+  await skillButtons(page).filter({ hasText: 'gradle-publish' }).click();
+  await page.keyboard.press('ArrowDown');
+  await expect(chosen(page)).toHaveAccessibleName('pdf-fill: SKILL.md');
+  await expect(page.locator('[data-place][data-chosen]')).toHaveText('pdf-fill');
+  await page.keyboard.press('ArrowUp');
+  await expect(chosen(page)).toHaveAccessibleName('gradle-publish: SKILL.md');
 });

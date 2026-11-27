@@ -2,8 +2,8 @@
 // alike the skills of two repositories, the closer their worlds stand; an organization's
 // repositories are scanned together, each a world. A field for a repository or an organization
 // link, and one for a token; the system, with its register of worlds; and, at a world, its skills
-// as an index with a filter and as the places of its map, and the SKILL.md of the chosen one, on a
-// sheet of its own.
+// as an index with a filter, under their repositories or their themes, and as the places of its
+// map, and the SKILL.md of the chosen one, on a sheet of its own.
 import {
   AlertTriangle,
   ExternalLink,
@@ -35,6 +35,7 @@ import { flushSync } from 'react-dom';
 import type { OrganizationView, RepositoryView, ScanOptions, ScanView, SkillView } from '../src/browser.ts';
 import { parseGitHubUrl } from '../src/core/github.ts';
 import { filterSkills } from '../src/core/model.ts';
+import { groupByTheme } from '../src/core/themes.ts';
 import { EXAMPLES } from './examples.ts';
 import { Sky, percent, type Kin, type Theme, type WorldName } from './Sky.tsx';
 import { chartOf, type Chart } from './sky/chart.ts';
@@ -52,6 +53,9 @@ type Group = {
   url: string;
   view: OrganizationView;
 };
+
+/** A group of the skills index: a theme and its skills, or a repository and the skills the filter leaves. */
+type Listing = { key: string; title?: string; skills: SkillView[]; repository?: RepositoryView['repository'] };
 
 /** A world of the system: a repository, charted or not yet. */
 type World = {
@@ -123,6 +127,8 @@ export function App({ backend }: { backend: Backend }) {
   // Kept in the page's memory only: not in the address, not in storage.
   const [token, setToken] = useState('');
   const [filter, setFilter] = useState('');
+  // Kept for the next scan too; not in the address, not stored.
+  const [grouped, setGrouped] = useState(false);
   const [worlds, setWorlds] = useState(firstWorlds);
   const [groups, setGroups] = useState<Group[]>([]);
   /** The worlds asked for, in the order they were: the address lists them. */
@@ -200,7 +206,7 @@ export function App({ backend }: { backend: Backend }) {
         setSelected((selected) => ({
           ...selected,
           [key]: undefined,
-          ...Object.fromEntries(result.repositories.map((repository) => [repository.repository.id.toLowerCase(), repository.skills[0]?.id])),
+          ...Object.fromEntries(result.repositories.map((repository) => [repository.repository.id.toLowerCase(), undefined])),
         }));
       } else {
         setWorlds((worlds) =>
@@ -211,7 +217,8 @@ export function App({ backend }: { backend: Backend }) {
             return { ...world, state: 'charted' as const, scan: result, name: result.repository.id + (ref ? ` @ ${ref}` : '') };
           }),
         );
-        if ('skills' in result) setSelected((selected) => ({ ...selected, [key]: result.skills[0]?.id }));
+        // No skill is chosen yet: the first one listed is, under its repository or its theme.
+        if ('skills' in result) setSelected((selected) => ({ ...selected, [key]: undefined }));
       }
       if (follow && turn !== latest.current) return;
       if (charted && follow) setAt(key);
@@ -353,11 +360,15 @@ export function App({ backend }: { backend: Backend }) {
   }, [worlds]);
 
   // What is in view: a world's repository, or an organization's repositories; and what the filter
-  // leaves of their skills. The chosen skill, or else the first one left.
+  // leaves of their skills, as listed: under their themes, or under their repositories. The chosen
+  // skill, or else the first one listed.
   const result = here ? here.scan! : over?.view;
   const repositories: RepositoryView[] = !result ? [] : 'repositories' in result ? result.repositories : [result];
   const shown = repositories.map((repository) => ({ ...repository, skills: filterSkills(repository.skills, filter) })).filter(({ skills }) => skills.length > 0);
-  const skills = shown.flatMap((repository) => repository.skills);
+  const listing: Listing[] = grouped
+    ? groupByTheme(shown.flatMap((repository) => repository.skills)).map(({ title, skills }) => ({ key: title, title, skills }))
+    : shown.map(({ repository, skills }) => ({ key: repository.id, skills, repository }));
+  const skills = listing.flatMap((group) => group.skills);
   const chosen = skills.find((skill) => skill.id === selected[at ?? '']) ?? skills[0];
   // Over an organization, the world of the skill pointed at, or else of the chosen one, is marked.
   const worldOf = (id: string | undefined) => (over && id ? worlds.find((world) => world.scan?.skills.some((skill) => skill.id === id))?.key : undefined);
@@ -611,12 +622,15 @@ export function App({ backend }: { backend: Backend }) {
           <Result
             view={result}
             shown={shown}
+            listing={listing}
             selected={chosen}
             filter={filter}
+            grouped={grouped}
             pointed={pointed}
             kin={here ? (charted.find((world) => world.key === here.key)?.kin ?? []) : []}
             worlds={charted.length}
             onFilter={setFilter}
+            onGroup={setGrouped}
             onSelect={(id) => setSelected((selected) => ({ ...selected, [at]: id }))}
             onPoint={setPointed}
             onVisit={visit}
@@ -630,12 +644,15 @@ export function App({ backend }: { backend: Backend }) {
 function Result({
   view,
   shown,
+  listing,
   selected,
   filter,
+  grouped,
   pointed,
   kin,
   worlds,
   onFilter,
+  onGroup,
   onSelect,
   onPoint,
   onVisit,
@@ -644,14 +661,18 @@ function Result({
   view: RepositoryView | OrganizationView;
   /** The repositories and the skills the filter leaves. */
   shown: RepositoryView[];
+  /** The skills as the index lists them: under their themes, or under their repositories. */
+  listing: Listing[];
   selected?: SkillView;
   filter: string;
+  grouped: boolean;
   pointed?: string;
   /** The other worlds of the system, the most alike first. */
   kin: { key: string; name: string; kin: Kinship }[];
   /** How many worlds the system has. */
   worlds: number;
   onFilter(filter: string): void;
+  onGroup(grouped: boolean): void;
   onSelect(id: string): void;
   onPoint(id: string | undefined): void;
   onVisit(key: string | undefined): void;
@@ -659,7 +680,7 @@ function Result({
   const organization = 'organization' in view ? view.organization : undefined;
   const repositories = 'repositories' in view ? view.repositories : [view];
   const all = repositories.reduce((sum, repository) => sum + repository.skills.length, 0);
-  const skills = shown.flatMap((repository) => repository.skills);
+  const skills = listing.flatMap((group) => group.skills);
   const count = skills.length === all ? `${all}` : `${skills.length} of ${all}`;
   const index = useRef<HTMLDivElement>(null);
 
@@ -763,6 +784,9 @@ function Result({
               autoComplete="off"
               spellCheck={false}
             />
+            <label className="group">
+              <DrawablyToggle checked={grouped} onChange={(event) => onGroup(event.target.checked)} /> Group by theme
+            </label>
           </div>
         )}
 
@@ -775,9 +799,14 @@ function Result({
         {skills.length > 0 && (
           <nav className="index" aria-label="Skills">
             <div className="entries" ref={index} onKeyDown={step}>
-              {shown.map(({ repository, skills }) => (
-                <section key={repository.id} aria-label={organization && repository.id}>
-                  {organization && (
+              {listing.map(({ key, title, skills, repository }) => (
+                <section key={key} aria-label={title ?? (organization && repository?.id)}>
+                  {title !== undefined && (
+                    <h3>
+                      {title} <small>· {plural(skills.length, 'skill', 'skills')}</small>
+                    </h3>
+                  )}
+                  {organization && repository && (
                     <h3>
                       <a href={`${repository.url}/tree/${repository.commit}`} target="_blank" rel="noreferrer">
                         {repository.id}
@@ -807,7 +836,7 @@ function Result({
                             )}
                           </strong>
                           {skill.description && <span>{firstSentence(skill.description)}</span>}
-                          <code>{skill.path}</code>
+                          <code>{organization && grouped ? `${skill.repository}/${skill.path}` : skill.path}</code>
                         </button>
                       </li>
                     ))}

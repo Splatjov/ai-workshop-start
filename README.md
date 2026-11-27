@@ -15,10 +15,14 @@ build-tools-bump-gradle-api — Bumps the Gradle API version that Kotlin Gradle 
 
 `./skill-atlas scan https://github.com/JetBrains` scans every repository of an organization;
 `--filter "gradle api"` shows only the skills with those words in their name, description or path.
+`--group` lists the skills by theme, from the words their names and descriptions share (offline);
+in the browser, the *Group by theme* switch.
 
 Set `GITHUB_TOKEN` in the environment for a higher GitHub rate limit, which an organization needs:
 `GITHUB_TOKEN=<token> ./skill-atlas scan …`; in the browser, paste it into the *GitHub token* field. `npm test` runs the tests; `npm run test:e2e`, the end-to-end ones on real repositories.
 A `/tree/<commit>` URL scans that commit: `./skill-atlas scan https://github.com/JetBrains/koog/tree/709079e`.
+A repository's scan is kept in `~/.cache/skill-atlas` (or `$XDG_CACHE_HOME/skill-atlas`), by commit: a rescan of
+an unchanged commit asks GitHub for that commit only. Delete the directory to start over.
 
 In the browser: `npm run web` opens an atlas of worlds, drawn by hand. Every repository you scan is
 a world of a system, and the more alike the skills of two repositories, the closer their worlds

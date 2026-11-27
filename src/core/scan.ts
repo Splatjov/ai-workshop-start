@@ -11,11 +11,13 @@ export type Source = {
   warnings: string[];
   /** The file's bytes, or undefined if it is not there. */
   read(path: string): Promise<Uint8Array | undefined>;
+  /** Given every SKILL.md the scan read, as text (undefined: not there), to keep for the next run. */
+  keep?(files: { path: string; text: string | undefined }[]): Promise<void>;
 };
 
 export type ScanResult = { repository: Repository; skills: Skill[]; warnings: string[] };
 
-/** fetch → find → parse. Nothing is stored: the result is all there is. */
+/** fetch → find → parse. What was read goes to the source's `keep`, if it has one (the CLI's cache). */
 export async function scan(source: Source): Promise<ScanResult> {
   const files = findSkills(source.paths, source.repository.name);
   // The files are read at the same time: on GitHub, each one is a request.
@@ -23,7 +25,9 @@ export async function scan(source: Source): Promise<ScanResult> {
   const missing = read.flatMap(({ file, bytes }) =>
     bytes ? [] : [`${file.path}: listed, but not found at the scanned commit; skipped`],
   );
-  const found = read.flatMap(({ file, bytes }) => (bytes ? [{ file, text: new TextDecoder().decode(bytes) }] : []));
+  const texts = read.map(({ file, bytes }) => ({ file, text: bytes && new TextDecoder().decode(bytes) }));
+  await source.keep?.(texts.map(({ file, text }) => ({ path: file.path, text })));
+  const found = texts.flatMap(({ file, text }) => (text === undefined ? [] : [{ file, text }]));
   const results = mergeCopies(found).map(({ file, text }) => readSkill(source, file, text));
   return {
     repository: source.repository,

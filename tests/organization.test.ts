@@ -439,7 +439,7 @@ test('--filter, through the real CLI', () => {
 });
 
 test('--filter without its words, another option, two targets → the usage, exit code 1', async () => {
-  const usage = 'Usage: skill-atlas scan <GitHub URL | directory> [--filter <words>]';
+  const usage = 'Usage: skill-atlas scan <GitHub URL | directory> [--filter <words>] [--group]';
   assert.deepEqual(await atlas(['scan', FIXTURE, '--filter']), { code: 1, stdout: '', stderr: usage });
   assert.deepEqual(await atlas(['scan', FIXTURE, '--token', 'x']), { code: 1, stdout: '', stderr: `Unknown option: --token\n${usage}` });
   assert.deepEqual(await atlas(['scan', FIXTURE, FIXTURE]), { code: 1, stdout: '', stderr: usage });

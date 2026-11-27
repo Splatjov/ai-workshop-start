@@ -648,6 +648,13 @@ h1 .spark {
   text-transform: uppercase;
 }
 
+/* Or under their themes: `gradle · 2 skills`. */
+.index section h3 small {
+  color: var(--pencil);
+  font: inherit;
+  font-weight: 400;
+}
+
 .index section:first-child h3 {
   margin-top: 4px;
 }
@@ -1276,6 +1283,8 @@ h1 .spark {
 /* The filter: a field over the index. */
 .filter {
   display: flex;
+  /* Where the ledger is narrow (a phone), the switch goes under the field, which keeps the row. */
+  flex-wrap: wrap;
   align-items: center;
   gap: 9px;
   margin-top: 14px;
@@ -1287,7 +1296,7 @@ h1 .spark {
 }
 
 .filter .drawably-inputbox {
-  flex: 1;
+  flex: 1 1 190px;
   display: block;
   min-width: 0;
 }
@@ -1300,6 +1309,17 @@ h1 .spark {
 
 .filter input::placeholder {
   color: rgb(var(--ink-rgb) / 0.42);
+}
+
+/* Group by theme: a switch beside the filter. */
+.filter .group {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--pencil);
+  white-space: nowrap;
+  cursor: pointer;
 }
 
 .filter + .index {
