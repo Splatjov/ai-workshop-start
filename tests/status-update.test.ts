@@ -181,4 +181,7 @@ test('SKILL.md: its name, and the marks and channel rules the script follows', (
   const readme = readFileSync(new URL('../.claude/automations/README.md', import.meta.url), 'utf8');
   assert.match(readme, /The post goes to `#decision-making`\s+\(`C0CMCSTCQ94`\); to post to another channel, set `SLACK_STATUS_CHANNEL`/);
   assert.match(skill, /event_type: status_update/);
+  // "The post says only what GitHub says": an item GitHub contradicts is taken out, not posted.
+  assert.match(skill, /One that\s+still does not hold → \*\*it is not posted\*\*: delete its line/);
+  assert.doesNotMatch(skill, /leave the post as it is, post it/);
 });

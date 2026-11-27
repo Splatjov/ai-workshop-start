@@ -121,8 +121,10 @@ gh issue view <n> --json state,stateReason,closedAt        # a done issue item
 
 A done PR is `MERGED` with `mergedAt` in the range; a done issue is `CLOSED`, `COMPLETED`, closed
 in the range; a review or in-progress PR is `OPEN`, a draft for in progress. An item that does
-not hold (it changed between the steps) → write the post again (step 3). One that still does not
-hold → leave the post as it is, post it, and put the item under "Skill gaps" in the summary.
+not hold (it changed between the steps) → write the post again (step 3) and check again. One that
+still does not hold → **it is not posted**: delete its line from `/tmp/status-post.md` (and its
+person's heading, when it was that person's only item), and put the item under "Skill gaps" in
+the summary. No item left → nothing is posted.
 
 ## 5. Post it
 
