@@ -404,6 +404,25 @@ test('group by theme: a switch, off at first; on, the skills under their themes;
   expect(requests.length, 'grouping does not scan').toBe(scanned);
 });
 
+test('group by theme on a phone: the switch goes under the filter, which keeps the whole row', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto('./');
+  await scan(page, 'https://github.com/JetBrains/atlas-themes');
+  await expect(groupSwitch(page)).toBeVisible();
+  const row = (await page.locator('.filter').boundingBox())!;
+  const field = (await filterField(page).boundingBox())!;
+  const label = (await page.locator('.filter .group').boundingBox())!;
+  expect(field.width, 'the filter field has the row, after its icon').toBeGreaterThan(row.width - 40);
+  expect(label.y, 'the switch is under the field').toBeGreaterThanOrEqual(field.y + field.height);
+  expect(await page.evaluate('document.documentElement.scrollWidth'), 'no sideways scrolling').toBeLessThanOrEqual(390);
+  // On a wide screen they share one row, as before.
+  await page.setViewportSize({ width: 1280, height: 720 });
+  const wide = (await filterField(page).boundingBox())!;
+  const beside = (await page.locator('.filter .group').boundingBox())!;
+  expect(beside.x, 'the switch is next to the field').toBeGreaterThanOrEqual(wide.x + wide.width);
+  expect(beside.y).toBeLessThan(wide.y + wide.height);
+});
+
 test('group by theme with the filter: the groups of the skills it leaves; it stays on for the next scan, the filter does not', async ({ page }) => {
   await page.goto('./');
   await scan(page, 'https://github.com/JetBrains/atlas-themes');

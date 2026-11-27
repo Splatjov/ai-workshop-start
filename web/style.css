@@ -93,6 +93,8 @@ header p {
 
 .filter {
   display: flex;
+  /* On a narrow screen the switch goes under the field, which keeps the row. */
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   margin-top: 16px;
@@ -100,7 +102,7 @@ header p {
 }
 
 .filter .drawably-inputbox {
-  flex: 1;
+  flex: 1 1 240px;
   display: block;
 }
 

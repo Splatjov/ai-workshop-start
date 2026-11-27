@@ -18,7 +18,8 @@ controls and [@sketchyicons/react](https://www.npmjs.com/package/@sketchyicons/r
   themes (`spec/analysis.md`, "Themes"), each `<title> · N skills`, instead of under their
   repositories; of an organization, each skill's path after its repository's `owner/repo/`. With
   the filter, of the skills it leaves. The chosen skill stays; else the first one shown is chosen.
-  It stays as set for the next scan; *not* in the address, *not* stored
+  It stays as set for the next scan; *not* in the address, *not* stored. On a narrow screen (a
+  phone) it goes under the filter, which keeps the whole row
 - **Organization**: `<owner>`, linked, and `N skills in R repositories`; the skills under their
   repository's `owner/repo`, linked at its scanned commit; the first skill of the first repository
   is chosen. The filter spans every repository; one without a match is not listed
