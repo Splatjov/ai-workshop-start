@@ -119,8 +119,8 @@ videos, polish the skill until you like the report; then add it to `triggers.jso
 
 ## Status update
 
-A fifth automation, **Status update**, posts what changed in this repository to the team's
-private Slack channel, so nobody has to ask: the PRs merged, the issues resolved and the PRs in
+A fifth automation, **Status update**, posts what changed in this repository to `#decision-making`
+in Slack (`C0CMCSTCQ94`), so nobody has to ask: the PRs merged, the issues resolved and the PRs in
 review or in progress since the last post, by person, one mark per item
 ([`status-update`](../../.agents/skills/status-update/SKILL.md)). Nothing new since the last
 post → nothing is posted.
@@ -128,8 +128,8 @@ post → nothing is posted.
 **Not created in Air yet.** To create it: in the same environment, a new automation whose
 instructions are [status-update.prompt.md](status-update.prompt.md), on `main`, output
 `read-only`; no event trigger (**Run Now** to test, then a schedule, e.g. weekdays 09:30 and
-13:30). The environment needs `SLACK_BOT_TOKEN` and `SLACK_STATUS_CHANNEL` (the channel's id,
-`C…`, with the bot a member: `/invite @AI Workshop Bot`). Run it by hand, check the claims against
+13:30). The environment needs `SLACK_BOT_TOKEN`; `SLACK_STATUS_CHANNEL` (a channel id, `C…`,
+with the bot a member: `/invite @AI Workshop Bot`) only to post somewhere else. Run it by hand, check the claims against
 GitHub, polish the skill until you like the post; then add it to `triggers.json` with its id.
 
 - `read-only`: it writes nothing in git and nothing on GitHub; its one write is the Slack post.

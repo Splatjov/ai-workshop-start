@@ -145,6 +145,7 @@ test('SKILL.md: its name, and the marks and channel rules the script follows', (
   const skill = readFileSync(new URL('../.agents/skills/status-update/SKILL.md', import.meta.url), 'utf8');
   assert.match(skill, /^---\nname: status-update\ndescription: \S/);
   for (const mark of [':white_check_mark: done', ':eyes: review', ':construction: in progress']) assert.ok(skill.includes(mark), mark);
+  assert.match(skill, /\*\*`C0CMCSTCQ94`\*\* \(`#decision-making`/);
   assert.match(skill, /SLACK_STATUS_CHANNEL/);
   assert.match(skill, /event_type: status_update/);
 });
