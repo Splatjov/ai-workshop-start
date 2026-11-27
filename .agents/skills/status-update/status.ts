@@ -76,7 +76,7 @@ export function statusItems(repo: string, state: GitHubState, since: Date, until
       const issue = issues.get(ref.number);
       covered.add(ref.number);
       items.push({
-        person: person(pr.author, issue?.assignees?.[0], issue?.author, pr.mergedBy),
+        person: person(pr.author, issue?.author, pr.mergedBy),
         mark: 'done', number: ref.number, title: issue?.title ?? pr.title, url: ref.url,
         pr: { number: pr.number, url: pr.url },
       });

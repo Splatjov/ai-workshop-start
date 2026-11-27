@@ -90,6 +90,13 @@ test("a bot's PR is the person's who opened its issue, else who merged it", () =
     issueAuthors: { 19: ana },
   });
   assert.deepEqual(statusItems(REPO, s, since, until).map((i) => [i.person, i.number]), [['Ben', 20], ['Ben', 27], ['Ana', 22]]);
+  // The issue's author both times, whoever it is assigned to: in review, then merged.
+  const assigned = { closedIssues: [closed(20, 'Group skills by theme', '2026-11-27T10:39:37Z', { author: ana, assignees: [ben] })] };
+  const inReview = state({ openPrs: [open(25, 'Group skills', '2026-11-27T10:30:00Z', { author: air, closingIssuesReferences: [ref(20)] })], issueAuthors: { 20: ana } });
+  const done = state({ ...assigned, merged: [merged(25, 'Group skills', '2026-11-27T10:39:35Z', { author: air, mergedBy: air, closingIssuesReferences: [ref(20)] })] });
+  assert.deepEqual([inReview, done].map((st) => statusItems(REPO, st, since, until).map((i) => [i.person, i.mark, i.number])), [
+    [['Ana', 'review', 25]], [['Ana', 'done', 20]],
+  ]);
   const alone = state({ merged: [merged(28, 'Bot only', '2026-11-27T10:40:00Z', { author: air, mergedBy: air })] });
   assert.equal(statusItems(REPO, alone, since, until)[0].person, 'jetbrains-air');
 });
