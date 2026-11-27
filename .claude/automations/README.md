@@ -117,6 +117,28 @@ videos, polish the skill until you like the report; then add it to `triggers.jso
 - The scripts are the source of truth: the automation follows them and never edits them; a step
   that looks wrong is a "Script notes" line in its run summary.
 
+## Status update
+
+A fifth automation, **Status update**, posts what changed in this repository to Slack
+(`#decision-making`, or the team's own channel), so nobody has to ask: the PRs merged, the issues resolved and the PRs in
+review or in progress since the last post, by person, one mark per item
+([`status-update`](../../.agents/skills/status-update/SKILL.md)). Nothing new since the last
+post → nothing is posted.
+
+**Not created in Air yet.** To create it: in the same environment, a new automation whose
+instructions are [status-update.prompt.md](status-update.prompt.md), on `main`, output
+`read-only`; no event trigger (**Run Now** to test, then a schedule, e.g. weekdays 09:30 and
+13:30). The environment needs `SLACK_BOT_TOKEN`. The post goes to `#decision-making`
+(`C0CMCSTCQ94`); to post to another channel, set `SLACK_STATUS_CHANNEL` (the channel's id, `C…`,
+with the bot a member: `/invite @AI Workshop Bot`). Run it by hand, check the claims against
+GitHub, polish the skill until you like the post; then add it to `triggers.json` with its id.
+
+- `read-only`: it writes nothing in git and nothing on GitHub; its one write is the Slack post.
+- Each post carries its range in the message's metadata (`event_type: status_update`), so the
+  next run starts where the last one ended, and a run started twice in a minute posts nothing.
+- The post names GitHub logins, not Slack users: the bot has no `users:read`, so it cannot
+  tell who in Slack is who on GitHub, and the post pings nobody.
+
 ## What the platform does (checked on 2026-11-26)
 
 - The agent posts to GitHub as `jetbrains-air[bot]`, with a GitHub App token that can write pull
