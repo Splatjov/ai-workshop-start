@@ -60,7 +60,7 @@ Then the harness, as is (unindented on purpose; the heredoc expands `$PWD`). To 
 retyping: `sed -n '/^mkdir -p \/tmp\/red/,/^echo harness ready/p' .agents/skills/red-agent/SKILL.md > /tmp/red-harness.sh && bash /tmp/red-harness.sh`
 
 ```bash
-mkdir -p /tmp/red && rm -rf /tmp/red/out /tmp/red/evidence && ln -sfn "$PWD/node_modules" /tmp/red/node_modules
+mkdir -p /tmp/red && rm -rf /tmp/red/out /tmp/red/repro /tmp/red/evidence && ln -sfn "$PWD/node_modules" /tmp/red/node_modules
 cat > /tmp/red/pw.config.ts <<EOF
 import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
@@ -173,15 +173,18 @@ attempt and run it again.
 
 **Reproduce each candidate**: write `/tmp/red/<name>-repro.red.ts` with only the steps the issue
 will list, and nothing else, its `name` `<name>-repro`, and run it twice, from a clean slate:
-`rm -rf /tmp/red/evidence/<name>-repro*; QA_TOKEN=$(gh auth token) npx playwright test -c /tmp/red/pw.config.ts --repeat-each 2 <name>-repro`.
+`rm -rf /tmp/red/evidence/<name>-repro*; QA_TOKEN=$(gh auth token) npx playwright test -c /tmp/red/pw.config.ts --repeat-each 2 --output /tmp/red/repro/<name>-repro <name>-repro`.
 Wrong both times (`<name>-repro/` and `<name>-repro-run2/`) → a bug.
+The `--output` is not optional: Playwright empties its output directory at the start of every
+run, so with the shared `/tmp/red/out` only the last repro would keep its video.
 Make it short: the fewest steps that still show it, a pinned commit (`/tree/<sha>`) where a
 repository is needed. The repro's first run is the one whose video and screenshots go into the issue.
 
 Then the media, for each bug:
 
 ```bash
-for d in /tmp/red/evidence/*-repro/; do s=$(basename "$d"); v=$(find /tmp/red/out -path "*$s*" ! -path '*-repeat*' -name '*.webm' | head -1)
+for d in /tmp/red/evidence/*-repro/; do s=$(basename "$d"); v=$(find "/tmp/red/repro/$s" ! -path '*-repeat*' -name '*.webm' | head -1)
+  [ -n "$v" ] || { echo "no video for $s: run its repro again, with --output"; continue; }
   cp "$v" "$d/video.webm"
   ffmpeg -y -loglevel error -i "$v" -vf "fps=6,scale=800:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=64[p];[b][p]paletteuse" "$d/video.gif"
 done; du -sh /tmp/red/evidence/*-repro
