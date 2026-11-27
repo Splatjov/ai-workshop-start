@@ -207,6 +207,10 @@ in the repository's style (`git log --oneline -15`): a subject that says what ch
 `Review finding <k>: <title>`. Stage only the files of the fix (`git add <paths>`, never `-A`);
 `git status --porcelain` is empty afterwards.
 
+**What the round learned** goes in a note (`.claude/skills/update-memory/SKILL.md`), committed
+with the fixes. Only in a round that has fix commits: a declined round or a merge commits nothing,
+so its lesson goes in the run summary.
+
 **Before ending**, make sure the push at the end of the run will go through:
 
 ```bash

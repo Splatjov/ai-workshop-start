@@ -7,6 +7,10 @@ Integration tests for every case in the spec.
 - All tests pass locally
 - The CI build is green
 
+## Memory
+Notes of earlier tasks are in [memory/](memory/), one lesson per file: search them when needed
+(`grep -ril "<words>" memory/`). At the end of a task, use [update-memory](.claude/skills/update-memory/SKILL.md).
+
 ## Pull requests
 A mini demo of what changes, in the description: [pr-demo](.claude/skills/pr-demo/SKILL.md).
 
